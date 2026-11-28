@@ -214,7 +214,10 @@ namespace VIctoryLauncher
         // (VIctory-NVIDIA #331, #459; their c1cbdc9 makes it ready only with DLSS on).
         // FSR frame generation needs an upscaling that is not the title's own. DLSS is one; AMD's own
         // upscaler is the other now (VICTORY_FSR, this engine only), so a dedicated Radeon has it too.
-        bool FsrFgHere { get { return FgChoice == "fsr" && !UseAmdEngine && !integratedOnly && (anyRtx || FsrMode != "off"); } }
+        // AMD's frame generation needs an upscaling of ours: DLSS on an RTX, or AMD's own upscaler on a Radeon
+        // (which picking this turns on, see PickFg). Were it offered only with the picker already on, a Radeon's
+        // owner would look for it and not find it.
+        bool FsrFgHere { get { return FgChoice == "fsr" && !UseAmdEngine && !integratedOnly && (anyRtx || hasRadeon || FsrMode != "off"); } }
 
         // The frame generation the player picked (launcher.ini fg_engine): auto (the best this card has), smooth
         // (NVIDIA Smooth Motion, RTX 40/50), nvsmooth30 (RTX 30, experimental) or vi (VIctory's own, any card,
@@ -247,6 +250,17 @@ namespace VIctoryLauncher
             fsrKeys.Clear(); fsrBox.Items.Clear();
             Action<string, string> add = (key, text) => { fsrKeys.Add(key); fsrBox.Items.Add(text); };
             add("off", L("The title's own upscaler (as today)", "O upscaler do proprio jogo (como hoje)", "L'upscaler du jeu (comme aujourd'hui)"));
+            // AMD's upscaler is AMD's: on a machine without a Radeon the picker offers nothing it cannot do.
+            if (!hasRadeon)
+            {
+                add("off", L("AMD FSR needs an AMD Radeon (this PC has none)", "O FSR da AMD precisa de uma Radeon (este PC nao tem)", "Le FSR d'AMD demande une Radeon (ce PC n'en a pas)"));
+                fsrKeys.RemoveAt(fsrKeys.Count - 1);
+                fsrKeys.Add("none");
+                fsrBox.Enabled = false;
+                fsrBox.SelectedIndex = 0;
+                return;
+            }
+            fsrBox.Enabled = true;
             add("nativeaa", L("AMD FSR, native AA (same size, sharpened)", "AMD FSR, AA nativo (mesmo tamanho, mais nitido)", "AMD FSR, AA natif (meme taille, plus net)"));
             add("quality", L("AMD FSR, quality (2/3 of the screen)", "AMD FSR, qualidade (2/3 do ecra)", "AMD FSR, qualite (2/3 de l'ecran)"));
             add("balanced", L("AMD FSR, balanced (58 %)", "AMD FSR, equilibrado (58 %)", "AMD FSR, equilibre (58 %)"));
@@ -271,7 +285,7 @@ namespace VIctoryLauncher
             UpdateBanner(); Refresh2();
         }
 
-        /// AMD's upscaler in the folder (`VICTORY_FSR`): the upscaling effect alone is enough.
+        /// AMD's upscaler in the folder (`VICTORY_FSR`): the upscaling effect and the loader.
         static bool HasFsrUpscaler
         {
             get { return File.Exists(Path.Combine(FidelityFxDir, "amd_fidelityfx_loader_dx12.dll")) && File.Exists(Path.Combine(FidelityFxDir, "amd_fidelityfx_upscaler_dx12.dll")); }
@@ -283,7 +297,8 @@ namespace VIctoryLauncher
         void FsrUpscaling(Dictionary<string, string> e)
         {
             if (FsrMode == "off" || UseAmdEngine || integratedOnly) return;
-            if (!HasFsrUpscaler) return;
+            // (The files are fetched at PLAY, before the game starts: this runs before that, so it does not
+            // wait to see them. Without them the app says so and the title's own upscaler runs.)
             e.Remove("VICTORY_RENDER_SCALE");
             e.Remove("VICTORY_OWN_UPSCALER");
             e["VICTORY_FSR"] = "1";
@@ -302,9 +317,9 @@ namespace VIctoryLauncher
             if (!UseAmdEngine && anyRtx)
                 add("dlss", olderRtx ? L("DLSS Frame Generation (RTX 20/30, with MFG Unlocker)", "DLSS Frame Generation (RTX 20/30, com o MFG Unlocker)", "DLSS Frame Generation (RTX 20/30, avec MFG Unlocker)")
                                      : L("DLSS Frame Generation (RTX 40/50, experimental)", "DLSS Frame Generation (RTX 40/50, experimental)", "DLSS Frame Generation (RTX 40/50, expérimental)"));
-            if (!UseAmdEngine && !integratedOnly && (anyRtx || FsrMode != "off"))
+            if (!UseAmdEngine && !integratedOnly && (anyRtx || hasRadeon || FsrMode != "off"))
                 add("fsr", anyRtx ? L("AMD frame generation (with AMD's upscaler, experimental)", "Geracao de frames AMD (com o upscaler AMD, experimental)", "Generation d'images AMD (avec l'upscaler AMD, experimental)")
-                                 : L("AMD frame generation (needs AMD FSR upscaling above, experimental)", "Geracao de frames AMD (precisa do FSR acima, experimental)", "Generation d'images AMD (demande l'upscaler FSR ci-dessus, experimental)"));
+                                 : L("AMD frame generation 2X (experimental)", "Geracao de frames AMD 2X (experimental)", "Generation d'images AMD 2X (experimental)"));
             if (rtx30 && File.Exists(NvSmoothDll)) add("nvsmooth30", L("NVSmooth30 (RTX 30, experimental)", "NVSmooth30 (RTX 30, experimental)", "NVSmooth30 (RTX 30, expérimental)"));
             if (!UseAmdEngine && !integratedOnly) add("vi", L("VIctory 2X (any card, experimental)", "VIctory 2X (qualquer placa, experimental)", "VIctory 2X (toute carte, expérimental)"));
             var i = fgKeys.IndexOf(FgChoice);
@@ -319,6 +334,14 @@ namespace VIctoryLauncher
             if (!AcceptVendorFrameGen(key)) { var back = fgKeys.IndexOf(FgChoice); fgBox.SelectedIndex = back < 0 ? 0 : back; return; }
             ManualChoice();
             WriteSetting("fg_engine", key);
+            // FSR frame generation reads an upscaling of ours: on a Radeon that is AMD's own upscaler, so picking
+            // it turns the upscaler on rather than asking the person to find the picker first.
+            if (key == "fsr" && hasRadeon && FsrMode == "off")
+            {
+                WriteSetting("fsr_mode", "quality");
+                FillFsrBox();
+                Log(L("Upscaling: AMD FSR, quality (set by the frame generation choice)", "Upscaling: AMD FSR, qualidade (posto pela escolha da geracao de frames)", "Upscaling : AMD FSR, qualite (choisi par la generation d'images)"));
+            }
             rtxFrameGen = canSmooth && (key == "auto" || key == "smooth");
             UpdateFgCard();
             UpdateBanner(); Refresh2();
@@ -534,12 +557,14 @@ namespace VIctoryLauncher
         // fetched by victory.exe (get-dlss, get-fsr, get-mfg). One that does not arrive leaves the game without it.
         void FetchFrameGenFiles(string log, bool on)
         {
-            if (!on || (!DlssFgHere && !FsrFgHere)) return;
+            if (!on || (!DlssFgHere && !FsrFgHere && FsrMode == "off")) return;
             if (FsrBlocked)
             {
                 Log(L("FSR 3 needs the 1080p screen size without an RTX: this game runs without frame generation.", "O FSR 3 precisa do ecra a 1080p sem uma RTX: este jogo corre sem geracao de frames.", "FSR 3 a besoin de l'écran en 1080p sans RTX : ce jeu tourne sans génération d'images."));
                 return;
             }
+            // (`VICTORY_FSR` needs the upscaler too; frame generation needs its own two files.)
+            bool fsrUp = FsrMode != "off";
             Func<string, string, Func<bool>, bool> get = (command, what, have) => {
                 if (have()) return true;
                 if (ClosingNow()) return false;
@@ -551,7 +576,9 @@ namespace VIctoryLauncher
                 return ok;
             };
             if (VendorUpscaling && !get("get-dlss", L("NVIDIA's DLSS files", "os ficheiros DLSS da NVIDIA", "les fichiers DLSS de NVIDIA"), () => HasStreamline)) return;
-            if (FsrFgHere) get("get-fsr", L("AMD's FSR 3 files", "os ficheiros FSR 3 da AMD", "les fichiers FSR 3 d'AMD"), () => HasFsr);
+            if (FsrFgHere || fsrUp)
+                get("get-fsr", L("AMD's FSR files", "os ficheiros FSR da AMD", "les fichiers FSR d'AMD"),
+                    () => HasFsr && (!fsrUp || HasFsrUpscaler));
             if (DlssFgHere && olderRtx) get("get-mfg", "MFG Unlocker", () => File.Exists(MfgDll));
         }
 

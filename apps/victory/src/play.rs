@@ -49,6 +49,9 @@ const FETCH_D3D12: &str = include_str!("../../../scripts/get-d3d12.ps1");
 
 /// The two AMD files FSR 3 frame generation loads.
 const FSR_FILES: [&str; 2] = ["amd_fidelityfx_loader_dx12.dll", "amd_fidelityfx_framegeneration_dx12.dll"];
+/// AMD's upscaler (FSR Upscaling 4's ML model and the analytical one it falls back to), which
+/// `get-fsr` fetches beside them: `VICTORY_FSR` needs it, frame generation does not.
+const FSR_UPSCALER: &str = "amd_fidelityfx_upscaler_dx12.dll";
 
 /// The settings the title is started with (`scripts\play-foxhound.ps1` has
 /// the same, with what each is for).
@@ -475,6 +478,12 @@ fn fetch_fsr(to: &Path) -> Result<()> {
         status.success() && has_fsr(to),
         "AMD's files did not arrive (see above); the title runs without FSR 3 frame generation"
     );
+    if !to.join(FSR_UPSCALER).is_file() {
+        println!(
+            "AMD's upscaler ({FSR_UPSCALER}) did not arrive: FSR upscaling (VICTORY_FSR) stays off; \
+             frame generation does not need it"
+        );
+    }
     Ok(())
 }
 
@@ -500,7 +509,7 @@ fn offer_fsr(card: &str) {
         println!("FSR 3 frame generation runs on it (2x). AMD's files for it are not on this PC yet.");
     }
     println!("They are AMD's own, under AMD's licence, and come from github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK");
-    println!("(about 30 MB, once).");
+    println!("(about 88 MB, once: frame generation's two files and the upscaler's).");
     print!("Download them now? [Y/n] ");
     let _ = std::io::stdout().flush();
     let mut answer = String::new();
