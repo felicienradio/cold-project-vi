@@ -133,7 +133,8 @@ pub fn run(
     let fsr_path = std::env::var_os("VICTORY_FSR_PATH").is_some_and(|v| v == "1");
     // (FSR 3 frame generation reads the upscaling's inputs as DLSS Frame
     // Generation does: the title renders through its FidelityFX path too.)
-    let upscaler = (available.dlss || available.framegen || available.fsr_framegen || fsr_path).then_some(asked.mode);
+    let upscaler = (available.dlss || available.fsr_upscale || available.framegen || available.fsr_framegen || fsr_path)
+        .then_some(asked.mode);
     // What this card does for frame generation (also on the picture for the first seconds).
     for (i, line) in victory_hle::streamline::notice_at_start().iter().enumerate() {
         println!("{}{line}", if i == 0 { "frame gen      " } else { "               " });
@@ -143,8 +144,9 @@ pub fn run(
     }
     if asked.any() {
         println!(
-            "upscaling      DLSS {}, frame generation {}{}",
+            "upscaling      DLSS {}, FSR {}, frame generation {}{}",
             if available.dlss { "on" } else if asked.dlss { "asked, not available" } else { "off" },
+            if available.fsr_upscale { "on" } else if asked.fsr { "asked, not available" } else { "off" },
             if available.framegen { "on" } else if asked.framegen { "asked, not available" } else { "off" },
             upscaler.map(|m| format!(", scene at the {} scale ({})", m.name(), m.scale())).unwrap_or_default()
         );

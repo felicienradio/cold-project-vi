@@ -33,6 +33,9 @@ use super::{Library, plan};
 
 const LOADER: &str = "amd_fidelityfx_loader_dx12.dll";
 const FRAMEGEN: &str = "amd_fidelityfx_framegeneration_dx12.dll";
+/// The upscaling effect (FSR Upscaling 4 and the analytical 3 it falls back
+/// to): loaded when it is there, whether or not frame generation is asked.
+const UPSCALER: &str = "amd_fidelityfx_upscaler_dx12.dll";
 
 // Structure types (ffx_api.h, ffx_framegeneration.h, ffx_api_dx12.h,
 // ffx_api_framegeneration_dx12.h of FidelityFX SDK 2.x).
@@ -248,15 +251,20 @@ type Create = unsafe extern "C" fn(context: *mut Context, desc: *mut Header, mem
 type Destroy = unsafe extern "C" fn(context: *mut Context, memory: *const c_void) -> u32;
 type Configure = unsafe extern "C" fn(context: *mut Context, desc: *const Header) -> u32;
 type Dispatch = unsafe extern "C" fn(context: *mut Context, desc: *const Header) -> u32;
+type Query = unsafe extern "C" fn(context: *mut Context, desc: *mut Header) -> u32;
 
 /// The loader's exports.
 struct Ffx {
-    _framegen: Library,
+    /// The frame generation effect, when the folder has it (else it stays off).
+    framegen: Option<Library>,
+    /// The upscaling effect, when the folder has it (else upscaling stays off).
+    upscaler: Option<Library>,
     _loader: Library,
     create: Create,
     destroy: Destroy,
     configure: Configure,
     dispatch: Dispatch,
+    query: Query,
 }
 
 static FFX: OnceLock<Ffx> = OnceLock::new();
@@ -301,6 +309,11 @@ fn live() -> std::sync::MutexGuard<'static, Option<Live>> {
 /// `VICTORY_FSR_FRAMEGEN=1`.
 pub(crate) fn asked_from_env() -> bool {
     std::env::var("VICTORY_FSR_FRAMEGEN").is_ok_and(|v| v.trim() == "1")
+}
+
+/// `VICTORY_FSR=1`: the title's own upscaling is done by AMD's FSR upscaler.
+pub(crate) fn upscaling_from_env() -> bool {
+    std::env::var("VICTORY_FSR").is_ok_and(|v| v.trim() == "1")
 }
 
 /// `VICTORY_FIDELITYFX_DIR`, or a `fidelityfx` folder beside our exe.
@@ -350,8 +363,26 @@ fn load(dir: &Path) -> Result<Ffx, String> {
         }
         Ok(Library(module))
     };
-    // The effect first, by its full path: the loader then finds it in.
-    let framegen = open(FRAMEGEN)?;
+    // The effects first, by their full paths: the loader then finds them in.
+    // Either one is enough (the upscaler beside the loader alone is the
+    // 58 MB of AMD's files): what is missing is said and left off.
+    let framegen = match open(FRAMEGEN) {
+        Ok(library) => Some(library),
+        Err(why) => {
+            tracing::info!("FSR frame generation: {why}; it stays off");
+            None
+        }
+    };
+    let upscaler = match open(UPSCALER) {
+        Ok(library) => Some(library),
+        Err(why) => {
+            tracing::info!("FSR upscaling: {why}; the title's own upscaling stays");
+            None
+        }
+    };
+    if framegen.is_none() && upscaler.is_none() {
+        return Err("neither of AMD's effects is in the folder".into());
+    }
     let loader = open(LOADER)?;
     let module = loader.0;
     let find = |name: &CStr| {
@@ -371,15 +402,17 @@ fn load(dir: &Path) -> Result<Ffx, String> {
         destroy: get!(c"ffxDestroyContext", Destroy),
         configure: get!(c"ffxConfigure", Configure),
         dispatch: get!(c"ffxDispatch", Dispatch),
+        query: get!(c"ffxQuery", Query),
         _loader: loader,
-        _framegen: framegen,
+        framegen,
+        upscaler,
     })
 }
 
 /// Whether the title's upscalings are to be noted for us: the DLLs are in and
 /// DLSS Frame Generation does not have the presents.
 pub(crate) fn noting() -> bool {
-    FFX.get().is_some() && !super::FG_READY.load(Acquire)
+    FFX.get().is_some_and(|ffx| ffx.framegen.is_some()) && !super::FG_READY.load(Acquire)
 }
 
 /// Whether the presents go through FidelityFX's swap chain (frame generation
@@ -852,6 +885,314 @@ pub(crate) fn line_counts() -> Option<(u64, u64, u64, u64)> {
     })
 }
 
+// ---------------------------------------------------------------------------
+// FSR upscaling: the title's own FidelityFX upscaling done by AMD's.
+//
+// `VICTORY_FSR=1`: every upscale dispatch of the title's FidelityFX API is
+// recorded by AMD's FSR upscaler instead, from the same colour, depth, motion
+// vectors, exposure, reactive mask and composition mask into the same output,
+// at the same place of the title's command list (as DLSS is, in
+// `crate::streamline`). The work is done by `UPSCALER` of the FidelityFX SDK,
+// through the same API the title itself uses: on RDNA 4 the ML model of FSR
+// Upscaling 4 runs, elsewhere the analytical one the API falls back to, and
+// `ffxQuery` says which one was loaded (logged where the context is made).
+//
+// The render scale is the app's (`VICTORY_FSR_MODE`, the DLSS mode names): it
+// patches the title's renderer to that scale, so the sizes an upscaling names
+// are the ones the model was built for.
+//
+// AMD's DLLs are the person's, fetched from AMD's own repository by
+// `scripts/get-amd-fsr.ps1` (their licence: binaries only, no reverse
+// engineering); this repository does not carry them.
+
+/// `ffxCreateContextDescUpscaleVersion` (the API version we build against).
+const CREATE_UPSCALE_VERSION: u64 = 0x0001_000b;
+/// The upscaling effect's descriptions (`ffx_upscale.h`).
+const CREATE_UPSCALE: u64 = 0x0001_0000;
+/// `ffxDispatchDescUpscale`.
+const DISPATCH_UPSCALE: u64 = 0x0001_0001;
+/// `ffxQueryDescGetProviderVersion`: which model the API loaded.
+const QUERY_PROVIDER_VERSION: u64 = 6;
+/// FSR Upscaling 4.1.2 (`FFX_UPSCALER_VERSION` of the SDK we build against).
+const UPSCALER_VERSION: u32 = (4 << 22) | (1 << 12) | 2;
+
+/// `ffxCreateContextDescUpscale`: flags (FidelityFX's, the title's own), the
+/// largest render and output sizes, a message callback.
+#[repr(C)]
+struct CreateUpscale {
+    header: Header,
+    flags: u32,
+    max_render: Dims,
+    max_output: Dims,
+    message: *const c_void,
+}
+
+const _: () = assert!(size_of::<CreateUpscale>() == 0x30);
+
+/// `ffxDispatchDescUpscale`: the list, then colour, depth, motion vectors,
+/// exposure, reactive mask, composition mask and output; the camera, the
+/// sizes, sharpening, and the frame's own.
+#[repr(C)]
+struct DispatchUpscale {
+    header: Header,
+    command_list: *mut c_void,
+    color: Resource,
+    depth: Resource,
+    motion_vectors: Resource,
+    exposure: Resource,
+    reactive: Resource,
+    transparency_and_composition: Resource,
+    output: Resource,
+    jitter: Floats,
+    motion_vector_scale: Floats,
+    render_size: Dims,
+    upscale_size: Dims,
+    enable_sharpening: bool,
+    sharpness: f32,
+    frame_time_delta: f32,
+    pre_exposure: f32,
+    reset: bool,
+    camera_near: f32,
+    camera_far: f32,
+    camera_fov_angle_vertical: f32,
+    view_space_to_meters_factor: f32,
+    flags: u32,
+}
+
+/// The title's own description of an upscaling is the same structure
+/// (`victory_hle::modules::fidelityfx`): if these ever stop matching, ours is
+/// the wrong one.
+const _: () = assert!(size_of::<DispatchUpscale>() == 0x1b0);
+
+/// `ffxQueryDescGetProviderVersion`: the model behind a context.
+#[repr(C)]
+struct ProviderVersion {
+    header: Header,
+    version_id: u64,
+    version_name: *const std::ffi::c_char,
+}
+
+/// The upscaler context we made, and what it was made for.
+struct Scale {
+    context: Box<Context>,
+    flags: u32,
+    render: [u32; 2],
+    output: [u32; 2],
+    /// The model AMD's API loaded: the ML one of FSR 4, or the analytical one.
+    model: String,
+}
+
+static SCALE: Mutex<Option<Scale>> = Mutex::new(None);
+// SAFETY: a FidelityFX context, used by one thread at a time under the lock.
+unsafe impl Send for Scale {}
+/// The context could not be made: the title's own upscaling runs from now on.
+static SCALE_OFF: AtomicBool = AtomicBool::new(false);
+/// Since the start: upscalings recorded by AMD's, and dispatches it refused.
+static SCALE_DONE: AtomicU64 = AtomicU64::new(0);
+static SCALE_FAILED: AtomicU64 = AtomicU64::new(0);
+
+/// The title's own upscaling ran instead, for this reason: said once each.
+pub(crate) fn refused(why: &'static str) {
+    static SEEN: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
+    let mut seen = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+    if !seen.contains(&why) {
+        seen.push(why);
+        tracing::warn!("FSR upscaling: the title's own upscaling runs: {why}");
+    }
+}
+
+fn scale() -> std::sync::MutexGuard<'static, Option<Scale>> {
+    SCALE.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Whether AMD's upscaler is loaded and usable: the effect DLL is in the
+/// folder and no context was refused.
+pub(crate) fn upscaling_loaded() -> bool {
+    FFX.get().is_some_and(|ffx| ffx.upscaler.is_some()) && !SCALE_OFF.load(Relaxed)
+}
+
+/// Records AMD's FSR upscaling of `up` into `host`'s open list, in place of
+/// the title's own. `Err` (with the reason) leaves the title's own to run.
+pub(crate) fn upscale(host: &crate::host::HostList, up: &super::Upscale, id: u64) -> Result<(), &'static str> {
+    let Some(ffx) = FFX.get() else { return Err("AMD's FidelityFX DLLs are not loaded") };
+    if ffx.upscaler.is_none() {
+        return Err("amd_fidelityfx_upscaler_dx12.dll is not in the folder");
+    }
+    if SCALE_OFF.load(Relaxed) {
+        return Err("AMD's upscaler context could not be made on this device");
+    }
+    let camera = up.camera;
+    if camera.render.contains(&0) || camera.output.contains(&0) {
+        return Err("an empty render or output size");
+    }
+    // The inputs as a compute shader's would be (aliased views, uploads of
+    // title-written textures, depth twins), then in the states FSR is told.
+    let mut textures: [Option<(ID3D12Resource, u32)>; 7] = Default::default();
+    for i in [super::COLOUR, super::DEPTH, super::MOTION, super::EXPOSURE, super::REACTIVE, super::OUTPUT] {
+        let (resource, state) = up.resources[i];
+        if resource.is_null() {
+            continue;
+        }
+        if i != super::OUTPUT && crate::external::prepare_input(host, resource).is_none() {
+            return Err("an input could not be prepared");
+        }
+        let wanted = if i == super::OUTPUT { plan::output_state(state) } else { plan::input_state(state) };
+        let Some((texture, legal)) = crate::external::host_texture(host, resource, wanted) else {
+            return Err("a texture has no host copy");
+        };
+        if legal != wanted {
+            return Err("a texture cannot be in the state the upscaler needs");
+        }
+        textures[i] = Some((texture, legal));
+    }
+    if textures[super::OUTPUT].is_none() {
+        return Err("no output");
+    }
+    {
+        let mut live = scale();
+        let remake = live.as_ref().is_none_or(|s| s.render != camera.render || s.output != camera.output || s.flags != camera.flags);
+        if remake {
+            match create_scale(ffx, camera.render, camera.output, camera.flags) {
+                Some(made) => *live = Some(made),
+                None => {
+                    SCALE_OFF.store(true, Release);
+                    return Err("AMD's upscaler context could not be made for these sizes");
+                }
+            }
+        }
+    }
+    let mut live = scale();
+    let Some(s) = live.as_mut() else { return Err("no upscaler context") };
+    let texture = |i: usize| textures[i].as_ref().map_or(Resource::NONE, |(texture, state)| Resource::texture(texture, *state));
+    let mut desc = DispatchUpscale {
+        header: Header::new(DISPATCH_UPSCALE),
+        command_list: host.list.as_raw(),
+        color: texture(super::COLOUR),
+        depth: texture(super::DEPTH),
+        motion_vectors: texture(super::MOTION),
+        exposure: texture(super::EXPOSURE),
+        reactive: texture(super::REACTIVE),
+        transparency_and_composition: texture(5),
+        output: texture(super::OUTPUT),
+        jitter: Floats { x: camera.jitter[0], y: camera.jitter[1] },
+        motion_vector_scale: Floats { x: camera.motion_scale[0], y: camera.motion_scale[1] },
+        render_size: camera.render.into(),
+        upscale_size: camera.output.into(),
+        enable_sharpening: up.sharpness > 0.0,
+        sharpness: up.sharpness,
+        frame_time_delta: up.frame_ms,
+        pre_exposure: if up.pre_exposure > 0.0 { up.pre_exposure } else { 1.0 },
+        reset: camera.reset,
+        camera_near: camera.near,
+        camera_far: camera.far,
+        camera_fov_angle_vertical: camera.fov_y,
+        view_space_to_meters_factor: up.meters,
+        flags: up.flags,
+    };
+    // SAFETY: our context and a filled description of live textures in the
+    // states they are in when `list` runs.
+    let code = unsafe { (ffx.dispatch)(&mut *s.context, (&raw mut desc).cast()) };
+    if code != OK {
+        let n = SCALE_FAILED.fetch_add(1, Relaxed) + 1;
+        if n.is_power_of_two() {
+            tracing::warn!(code, render = ?camera.render, output = ?camera.output, "FSR upscaling: AMD's upscaler refused the dispatch; the title's own runs");
+        }
+        return Err("AMD's upscaler refused the dispatch");
+    }
+    crate::external::output_written(up.resources[super::OUTPUT].0);
+    let n = SCALE_DONE.fetch_add(1, Relaxed) + 1;
+    if n == 1 {
+        tracing::info!(
+            id,
+            render = ?camera.render,
+            output = ?camera.output,
+            flags = format_args!("{:#x}", camera.flags),
+            jitter = ?camera.jitter,
+            mvec_scale = ?camera.motion_scale,
+            near = camera.near,
+            far = camera.far,
+            fov = camera.fov_y,
+            pre_exposure = up.pre_exposure,
+            sharpening = up.sharpness,
+            depth_inverted = camera.flags & plan::FFX_DEPTH_INVERTED != 0,
+            auto_exposure = textures[super::EXPOSURE].is_none(),
+            reactive = textures[super::REACTIVE].is_some(),
+            model = %s.model,
+            "FSR upscaling: AMD's upscaler recorded in place of the title's FidelityFX"
+        );
+    }
+    Ok(())
+}
+
+/// Makes the upscaler context for `render` in, `output` out, with the title's
+/// flags (the same meanings: the same API). Logs which model AMD loaded.
+fn create_scale(ffx: &Ffx, render: [u32; 2], output: [u32; 2], flags: u32) -> Option<Scale> {
+    let device = crate::host::host().map(|host| host.device.clone())?;
+    let mut backend = CreateBackend { header: Header::new(CREATE_BACKEND_DX12), device: device.as_raw() };
+    let mut version = Version { header: Header::new(CREATE_UPSCALE_VERSION), version: UPSCALER_VERSION };
+    version.header.next = (&raw mut backend).cast();
+    let mut create = CreateUpscale {
+        header: Header::new(CREATE_UPSCALE),
+        flags,
+        max_render: render.into(),
+        max_output: output.into(),
+        message: std::ptr::null(),
+    };
+    create.header.next = (&raw mut version).cast();
+    let mut context: Box<Context> = Box::new(std::ptr::null_mut());
+    // SAFETY: filled descriptions that live through the call.
+    let mut code = unsafe { (ffx.create)(&mut *context, (&raw mut create).cast(), std::ptr::null()) };
+    if code != OK {
+        // The version description is optional, and an SDK older than ours
+        // knows nothing of it: asked again without it.
+        create.header.next = (&raw mut backend).cast();
+        // SAFETY: as above.
+        code = unsafe { (ffx.create)(&mut *context, (&raw mut create).cast(), std::ptr::null()) };
+    }
+    if code != OK || context.is_null() {
+        tracing::warn!(
+            code,
+            render = ?render,
+            output = ?output,
+            flags = format_args!("{flags:#x}"),
+            "FSR upscaling: AMD's upscaler made no context for these sizes; the title's own upscaling runs"
+        );
+        return None;
+    }
+    // Which model is behind it: the ML one of FSR 4 where the card runs it,
+    // the analytical one elsewhere.
+    let mut query = ProviderVersion { header: Header::new(QUERY_PROVIDER_VERSION), version_id: 0, version_name: std::ptr::null() };
+    // SAFETY: our context and a description it fills.
+    let queried = unsafe { (ffx.query)(&mut *context, (&raw mut query).cast()) };
+    let model = if queried == OK && !query.version_name.is_null() {
+        // SAFETY: the provider's name, a NUL-terminated string the effect owns.
+        unsafe { std::ffi::CStr::from_ptr(query.version_name) }.to_string_lossy().into_owned()
+    } else {
+        format!("unknown (ffxQuery {queried})")
+    };
+    tracing::info!(
+        render = ?render,
+        output = ?output,
+        flags = format_args!("{flags:#x}"),
+        model = %model,
+        "FSR upscaling: AMD's upscaler context made"
+    );
+    Some(Scale { context, flags, render, output, model })
+}
+
+/// The title's upscaler context is gone (no more of its dispatches): ours
+/// goes once the work submitted so far has run.
+pub(crate) fn upscaler_destroyed() {
+    let Some(ffx) = FFX.get() else { return };
+    let taken = scale().take();
+    if let Some(mut taken) = taken {
+        crate::external::finish_submitted();
+        // SAFETY: our context, and nothing that names it is in flight.
+        let code = unsafe { (ffx.destroy)(&mut *taken.context, std::ptr::null()) };
+        tracing::info!(code, "FSR upscaling: AMD's upscaler context destroyed with the title's");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -934,6 +1275,62 @@ mod tests {
         let mut quiet = facts(true, true, true, false);
         (quiet.dlss_fg_asked, quiet.fsr_asked) = (false, false);
         assert!(notice_of(&quiet, false, false).is_empty());
+    }
+
+
+    /// The folder `scripts/get-amd-fsr.ps1` fills (`amd-sdk/FidelityFX/bin` of
+    /// the repository), looked for from the crate upwards.
+    fn amd_folder() -> Option<std::path::PathBuf> {
+        if let Some(dir) = std::env::var_os("VICTORY_FIDELITYFX_DIR") {
+            return Some(dir.into());
+        }
+        let mut here = std::env::current_dir().ok()?;
+        loop {
+            let candidate = here.join("amd-sdk").join("FidelityFX").join("bin");
+            if candidate.join(UPSCALER).is_file() {
+                return Some(candidate);
+            }
+            if !here.pop() {
+                return None;
+            }
+        }
+    }
+
+    /// The upscaling effect AMD ships, checked against its signature, making a
+    /// context on the host's card for the Series S sizes, and saying which
+    /// model the API loaded: the ML one of FSR Upscaling 4 on RDNA 4, the
+    /// analytical one elsewhere.
+    #[test]
+    #[cfg(feature = "diagnostics")]
+    fn the_upscaler_makes_a_context_on_this_card() {
+        let Some(dir) = amd_folder() else {
+            eprintln!("skipping the upscaler: AMD's DLLs are not in amd-sdk/FidelityFX/bin (scripts/get-amd-fsr.ps1)");
+            return;
+        };
+        assert!(super::init(&dir), "AMD's DLLs did not load from {}", dir.display());
+        let ffx = FFX.get().expect("loaded");
+        assert!(ffx.upscaler.is_some(), "{} is in the folder", UPSCALER);
+        let made = create_scale(ffx, [1280, 720], [1920, 1080], 0);
+        let Some(mut made) = made else {
+            panic!("AMD's upscaler made no context for 1280x720 in, 1920x1080 out on this card");
+        };
+        eprintln!("AMD's upscaler made a context: model {}", made.model);
+        // SAFETY: our context, and nothing was recorded with it.
+        let code = unsafe { (ffx.destroy)(&mut *made.context, std::ptr::null()) };
+        assert_eq!(code, OK, "destroy");
+    }
+
+    #[test]
+    fn the_dispatch_lays_out_as_the_title_reads_it() {
+        use std::mem::offset_of;
+        assert_eq!(offset_of!(DispatchUpscale, command_list), 0x10);
+        assert_eq!(offset_of!(DispatchUpscale, color), 0x18);
+        assert_eq!(offset_of!(DispatchUpscale, output), 0x138);
+        assert_eq!(offset_of!(DispatchUpscale, jitter), 0x168);
+        assert_eq!(offset_of!(DispatchUpscale, render_size), 0x178);
+        assert_eq!(offset_of!(DispatchUpscale, flags), 0x1ac);
+        assert_eq!(offset_of!(CreateUpscale, max_render), 0x14);
+        assert_eq!(offset_of!(CreateUpscale, message), 0x28);
     }
 
     #[test]

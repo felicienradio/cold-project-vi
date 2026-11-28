@@ -314,7 +314,7 @@ extern "C" fn ffxDispatch(context: *mut *mut c_void, desc: *mut Header) -> u32 {
     first_dispatch(&d, &created);
     let up = upscale(&d, &created, handle);
     match streamline::upscale(&up) {
-        Taken::Dlss => OK,
+        Taken::Dlss | Taken::Fsr => OK,
         Taken::Noted => own(),
         Taken::No(why) if created.clamped => {
             // The title's FidelityFX on a context made for 1080p at the
@@ -387,6 +387,9 @@ fn upscale(d: &DispatchUpscale, created: &Created, context: usize) -> Upscale {
         },
         pre_exposure: d.pre_exposure,
         frame_ms: d.frame_time_delta,
+        flags: d.flags,
+        meters: d.view_space_to_meters_factor,
+        sharpness: if d.enable_sharpening != 0 { d.sharpness } else { 0.0 },
     }
 }
 

@@ -83,6 +83,9 @@ pub struct Asked {
     /// Generation does not run ([`fsr`]), from `fidelityfx_dir`
     /// (`VICTORY_FIDELITYFX_DIR`).
     pub fsr_framegen: bool,
+    /// `VICTORY_FSR=1`: AMD's FSR upscaler does the title's own upscaling
+    /// ([`fsr`]), from the same `fidelityfx_dir`.
+    pub fsr: bool,
     pub fidelityfx_dir: PathBuf,
     /// The Series S profile (the caller sets it; from the environment,
     /// `VICTORY_MENU_CONSOLE=series-s`). Without DLSS the title's own
@@ -98,12 +101,18 @@ impl Asked {
         let on = |name: &str| var(name).is_some_and(|v| v.trim() == "1");
         let framegen = on("VICTORY_FRAMEGEN");
         let fsr_framegen = fsr::asked_from_env();
-        let mode = match var("VICTORY_DLSS_MODE") {
+        let fsr = fsr::upscaling_from_env();
+        // The upscaler's own mode name, or the one DLSS is asked for.
+        let (mode_var, mode_var_name) = match var("VICTORY_FSR_MODE") {
+            Some(name) if fsr => (Some(name), "VICTORY_FSR_MODE"),
+            _ => (var("VICTORY_DLSS_MODE"), "VICTORY_DLSS_MODE"),
+        };
+        let mode = match mode_var {
             Some(name) => Mode::from_name(&name).ok_or_else(|| {
-                format!("VICTORY_DLSS_MODE={name}: not one of dlaa, quality, balanced, performance, ultraperformance")
+                format!("{mode_var_name}={name}: not one of dlaa, quality, balanced, performance, ultraperformance")
             })?,
             // Frame generation alone keeps the scene at the output's size.
-            None if (framegen || fsr_framegen) && !on("VICTORY_DLSS") => Mode::Dlaa,
+            None if (framegen || fsr_framegen) && !on("VICTORY_DLSS") && !fsr => Mode::Dlaa,
             None => Mode::Quality,
         };
         let preset = match var("VICTORY_DLSS_PRESET") {
@@ -124,13 +133,14 @@ impl Asked {
             hudless: var("VICTORY_FRAMEGEN_HUDLESS").is_none_or(|v| v.trim() != "0"),
             present_hook: on("VICTORY_STREAMLINE_PRESENT"),
             fsr_framegen,
+            fsr,
             fidelityfx_dir: fsr::dir_from_env(),
             series_s: var("VICTORY_MENU_CONSOLE").is_some_and(|c| c.trim() == "series-s"),
         })
     }
 
     pub fn any(&self) -> bool {
-        self.dlss || self.framegen
+        self.dlss || self.framegen || self.fsr || self.fsr_framegen
     }
 }
 
@@ -143,6 +153,9 @@ pub struct Available {
     /// AMD's DLLs for FSR 3 frame generation are in (it runs if DLSS Frame
     /// Generation does not).
     pub fsr_framegen: bool,
+    /// AMD's FSR upscaler is in and took its context: it does the title's own
+    /// upscaling (`VICTORY_FSR=1`).
+    pub fsr_upscale: bool,
 }
 
 /// One upscaling the title asked for: a FidelityFX `ffxDispatch` of an
@@ -160,6 +173,11 @@ pub struct Upscale {
     pub camera: plan::Camera,
     pub pre_exposure: f32,
     pub frame_ms: f32,
+    /// The dispatch's own flags and view-space scale (FidelityFX's terms), and
+    /// the sharpening it asks for (0: none).
+    pub flags: u32,
+    pub meters: f32,
+    pub sharpness: f32,
 }
 
 // SAFETY: pointers to title objects that live until the list has run (the
@@ -178,6 +196,8 @@ pub const OUTPUT: usize = 6;
 pub enum Taken {
     /// DLSS does it: the title's own must not run.
     Dlss,
+    /// AMD's FSR upscaler does it: the title's own must not run.
+    Fsr,
     /// Only noted for frame generation: the title's own runs.
     Noted,
     /// Neither: the title's own runs. Why, for the log.
@@ -395,7 +415,27 @@ pub fn init(asked: &Asked) -> Available {
             "FSR 3 frame generation stays off: it needs DLSS for the upscaling, which is off, or this card or these files do not give; without it the title stops at the start"
         );
     }
-    let fsr_framegen = asked.fsr_framegen && !fsr_needs_dlss && fsr::init(&asked.fidelityfx_dir);
+    // AMD's DLLs, for the upscaler or for frame generation: one loader, and
+    // the effects beside it are what is asked of it.
+    let fsr_loaded = (asked.fsr || asked.fsr_framegen) && fsr::init(&asked.fidelityfx_dir);
+    let fsr_framegen = asked.fsr_framegen && !fsr_needs_dlss && fsr_loaded;
+    let fsr_upscale = if !asked.fsr {
+        false
+    } else if fsr_loaded && fsr::upscaling_loaded() {
+        FSR_UPSCALE.store(true, Release);
+        tracing::info!(
+            folder = %asked.fidelityfx_dir.display(),
+            mode = asked.mode.name(),
+            "FSR upscaling: AMD's upscaler takes the title's upscaling (VICTORY_FSR=1)"
+        );
+        true
+    } else {
+        tracing::warn!(
+            folder = %asked.fidelityfx_dir.display(),
+            "FSR upscaling stays off: AMD's files are not in that folder (scripts/get-amd-fsr.ps1); the title's own upscaling runs"
+        );
+        false
+    };
     let _ = FACTS.set(Facts {
         adapter: default_adapter().map(|a| a.0).unwrap_or_default(),
         no_dlss,
@@ -406,7 +446,7 @@ pub fn init(asked: &Asked) -> Available {
         fsr_loaded: fsr_framegen,
         fsr_needs_dlss,
     });
-    Available { fsr_framegen, ..available }
+    Available { fsr_framegen, fsr_upscale, ..available }
 }
 
 /// What the start found out about frame generation on this card ([`notice`]).
@@ -593,7 +633,7 @@ fn load_and_init(asked: &Asked, require_line: bool) -> Result<Available, String>
         "Streamline loaded (manual hooking, no downloads)"
     );
     let _ = PLAN.set(Plan { asked: asked.clone(), dlss, framegen });
-    Ok(Available { dlss, framegen, fsr_framegen: false })
+    Ok(Available { dlss, framegen, fsr_framegen: false, fsr_upscale: false })
 }
 
 /// Logs whether a feature is supported, with its requirements; whether it is.
@@ -862,13 +902,17 @@ fn load(path: &Path) -> Result<Sl, String> {
 /// Whether the title's FidelityFX calls are to be served (DLSS or frame
 /// generation is on): `victory_hle` then puts its own in front of them.
 pub fn serving() -> bool {
-    PLAN.get().is_some_and(|p| p.dlss || p.framegen) || fsr::noting()
+    PLAN.get().is_some_and(|p| p.dlss || p.framegen) || fsr::noting() || FSR_UPSCALE.load(Acquire)
 }
+
+/// Whether AMD's FSR upscaler is to take the title's upscale dispatches
+/// (`VICTORY_FSR=1`, its files in and its context made).
+static FSR_UPSCALE: AtomicBool = AtomicBool::new(false);
 
 /// Whether DLSS is to take the title's upscale dispatches (`VICTORY_DLSS=1`
 /// and Streamline loaded).
 pub fn upscaling() -> bool {
-    PLAN.get().is_some_and(|p| p.dlss)
+    PLAN.get().is_some_and(|p| p.dlss) || FSR_UPSCALE.load(Acquire)
 }
 
 /// The host device is made: Streamline is given it (`slSetD3DDevice`), the
@@ -1091,13 +1135,15 @@ pub fn upscale(up: &Upscale) -> Taken {
     }
     let plan = PLAN.get();
     let dlss = plan.is_some_and(|p| p.dlss) && DLSS_READY.load(Acquire);
+    // AMD's upscaler where DLSS is not: the same inputs, into the same output.
+    let fsr = !dlss && FSR_UPSCALE.load(Acquire) && fsr::upscaling_loaded();
     // (FSR 3 frame generation reads the same inputs at the present.)
     let framegen = plan.is_some_and(|p| p.framegen) && FG_READY.load(Acquire) || fsr::noting();
-    if !dlss && !framegen {
+    if !dlss && !fsr && !framegen {
         return Taken::No(if plan.is_none() {
-            "Streamline is not loaded"
+            "no host upscaler is ready (Streamline is not loaded, AMD's upscaler neither)"
         } else {
-            "Streamline has no device yet, or its features did not start"
+            "no host upscaler is ready for this device"
         });
     }
     if [COLOUR, DEPTH, MOTION, OUTPUT].iter().any(|&i| up.resources[i].0.is_null()) {
@@ -1117,13 +1163,25 @@ pub fn upscale(up: &Upscale) -> Taken {
             if framegen {
                 note(host, &up, id);
             }
+            if fsr {
+                if let Err(why) = fsr::upscale(host, &up, id) {
+                    fsr::refused(why);
+                }
+                return true;
+            }
             dlss && evaluate(host, &up, id)
         }),
     );
     if !asked {
         return Taken::No("the title's list records nowhere (no host list)");
     }
-    if dlss { Taken::Dlss } else { Taken::Noted }
+    if fsr {
+        Taken::Fsr
+    } else if dlss {
+        Taken::Dlss
+    } else {
+        Taken::Noted
+    }
 }
 
 /// The title's own upscaling ran for this reason.
@@ -1436,6 +1494,7 @@ fn record(list: *mut c_void, textures: &Textures, camera: &plan::Camera, pre_exp
 /// The title's FidelityFX upscaler `context` is destroyed: what DLSS made
 /// for it goes once submitted work has run.
 pub fn upscaler_destroyed(context: usize) {
+    fsr::upscaler_destroyed();
     let (Some(sl), true) = (SL.get(), DLSS_READY.load(Acquire)) else { return };
     let _ = context;
     crate::external::finish_submitted();

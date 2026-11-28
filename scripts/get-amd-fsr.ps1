@@ -1,4 +1,4 @@
-# Fetches the AMD files FSR 3 frame generation needs (about 30 MB) from AMD's own GitHub (the FidelityFX SDK,
+# Fetches the AMD files FSR 3 frame generation and the FSR upscaler need (about 88 MB) from AMD's own GitHub (the FidelityFX SDK,
 # GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) into a fidelityfx folder: by default amd-sdk\FidelityFX\bin here
 # (git-ignored), where scripts\play-foxhound.ps1 looks for them; `victory get-fsr` names one under
 # %LOCALAPPDATA%\victory. They are AMD's, under AMD's licence (saved beside them: read it); this repository does
@@ -16,6 +16,9 @@ $base = "https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-S
 $files = [ordered]@{
     'amd_fidelityfx_loader_dx12.dll'          = 'E2191D3C0828BE45EB8AFFD4E3EC0378F2293ADC345B772A7170EDCF3B021ECB'
     'amd_fidelityfx_framegeneration_dx12.dll' = 'E6843252F58B0341A0D80F6A20BC0D840643EE95BC48C22CAC08745344577BB6'
+    # The upscaler (FSR Upscaling 4's ML model and the analytical one it falls
+    # back to), for `VICTORY_FSR=1`: 58 MB more.
+    'amd_fidelityfx_upscaler_dx12.dll'        = 'AAD4FCCCCB29084A655F9A4F9F613BD22C8C03FB4A0F8840148CC6543B4CCACE'
 }
 
 function Get-File([string]$Url, [string]$To) {
@@ -30,7 +33,7 @@ function Get-File([string]$Url, [string]$To) {
     $part
 }
 
-Write-Host "AMD FSR 3 frame generation (FidelityFX SDK $Tag), from github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK (about 30 MB):"
+Write-Host "AMD FSR (FidelityFX SDK $Tag), from github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK (about 88 MB):"
 New-Item -ItemType Directory -Force $bin | Out-Null
 foreach ($name in $files.Keys) {
     $to = Join-Path $bin $name
