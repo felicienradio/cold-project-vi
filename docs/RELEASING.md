@@ -4,6 +4,14 @@ Anyone with push access to **edupode/cold-project-vi** or **felicienradio/cold-p
 update. Nobody needs the release key or the Discord webhook: both live only in a Cloudflare Worker
 (`server/release-signer`) that signs for GitHub's release workflow and nothing else.
 
+## Download a Windows build
+
+Each push to `main` builds the Windows package. To build a particular branch on demand, open
+**Actions → Release → Run workflow**, select the branch and start the run. Open the completed
+run and download **VIctory-windows-x64-…** under **Artifacts** while signed in to GitHub.
+The ZIP contains the versioned installer, `victory.exe`, `Julia's Launcher.exe` and
+`SHA256SUMS.txt`. Publishing an update to players requires the version tag described below.
+
 ## Publish an update
 
 1. Make your changes and commit them.
