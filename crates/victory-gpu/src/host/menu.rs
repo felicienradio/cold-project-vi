@@ -142,9 +142,10 @@ const ITEMS: &[Item] = &[
         about: "THE DLSS MODEL. DEFAULT IS USUALLY BEST, TRY K OR M IF MOVING THINGS SMEAR." },
     Item { var: "VICTORY_MENU_FRAMEGEN", label: "FRAME GENERATION", values: &[("0", "OFF"), ("2", "2X"), ("3", "3X"), ("4", "4X"), ("5", "5X"), ("6", "6X (MOST)")], live: false,
         about: "MADE-UP FRAMES BETWEEN THE GAME FRAMES: SMOOTHER MOTION, A LITTLE MORE INPUT LAG. THE GAME ITSELF DOES NOT RUN FASTER." },
-    // DLSS Frame Generation where it runs (RTX 40 and later), else AMD's FSR 3 (2X only, with DLSS upscaling).
-    Item { var: "VICTORY_MENU_FG_TYPE", label: "FRAME GEN TYPE", values: &[("auto", "AUTO"), ("dlss", "DLSS"), ("fsr", "FSR 3 (NEEDS DLSS)")], live: false,
-        about: "DLSS FRAME GEN NEEDS AN RTX 40 OR 50 (RTX 20/30: MFG UNLOCKER). FSR 3 RUNS 2X WITH DLSS UPSCALING ON ANY RTX." },
+    // DLSS Frame Generation where it runs (RTX 40 and later), else AMD's FSR 3 (2X only: it reads
+    // the upscaling, DLSS's or AMD's own with VICTORY_FSR=1).
+    Item { var: "VICTORY_MENU_FG_TYPE", label: "FRAME GEN TYPE", values: &[("auto", "AUTO"), ("dlss", "DLSS"), ("fsr", "FSR 3")], live: false,
+        about: "DLSS FRAME GEN NEEDS AN RTX 40 OR 50 (RTX 20/30: MFG UNLOCKER). FSR 3 GIVES 2X ON DLSS UPSCALING, OR ON THE RADEON FSR UPSCALER." },
     // Someone else's mod (apps\victory\src\play.rs): downloaded at the next start, then loaded.
     Item { var: MFG, label: "MFG UNLOCKER (MOD, RTX 20/30)", values: UNSET_ON, live: false,
         about: "A MOD, NOT OURS: DLSS FRAME GEN ON RTX 20 AND 30 CARDS." },
