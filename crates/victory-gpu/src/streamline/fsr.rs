@@ -412,7 +412,7 @@ fn load(dir: &Path) -> Result<Ffx, String> {
 /// Whether the title's upscalings are to be noted for us: the DLLs are in and
 /// DLSS Frame Generation does not have the presents.
 pub(crate) fn noting() -> bool {
-    FFX.get().is_some_and(|ffx| ffx.framegen.is_some()) && !super::FG_READY.load(Acquire)
+    asked_from_env() && FFX.get().is_some_and(|ffx| ffx.framegen.is_some()) && !super::FG_READY.load(Acquire)
 }
 
 /// Whether the presents go through FidelityFX's swap chain (frame generation
@@ -437,8 +437,12 @@ pub(crate) fn swap_chain(
     desc: &DXGI_SWAP_CHAIN_DESC1,
 ) -> Option<IDXGISwapChain3> {
     let ffx = FFX.get()?;
+    // AMD's upscaler alone does not interpolate anything: our present stays ours.
+    if !asked_from_env() || ffx.framegen.is_none() {
+        return None;
+    }
     if super::FG_READY.load(Acquire) {
-        tracing::info!("FSR 3 frame generation stays off: DLSS Frame Generation runs on this card");
+        tracing::info!("FSR frame generation stays off: DLSS Frame Generation runs on this card");
         return None;
     }
     let mut made: *mut c_void = std::ptr::null_mut();

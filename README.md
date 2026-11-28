@@ -326,6 +326,7 @@ video memory reserve help), and the `_Tiled` volumetrics shader, still being fix
   flickers on characters, no ray tracing.
 
 More: [docs/GUIDE-30FPS.md](docs/GUIDE-30FPS.md) (English guide and what each setting does),
+[docs/FSR.md](docs/FSR.md) (AMD's own upscaler and frame generation, and the files you fetch from AMD),
 [docs/LUZ-24FPS.md](docs/LUZ-24FPS.md) (Portuguese notes), [docs/replay.md](docs/replay.md) (frame recorder).
 Earlier upstream notes: [docs/archive/README-upstream.md](docs/archive/README-upstream.md).
 

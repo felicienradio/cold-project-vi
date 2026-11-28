@@ -404,24 +404,28 @@ pub fn init(asked: &Asked) -> Available {
     } else {
         Some(NoDlss::Card)
     };
-    // FSR 3 frame generation needs DLSS for the upscaling, on either console. On Series X the
-    // title's own FidelityFX takes the Series S sizes only and the title fails without DLSS; on
-    // Series S, with its own FidelityFX upscaler running beside our frame generation, the title
-    // stopped on a check (0x80000003 at +0x2219650) seconds into the start (2026-11-27: muted
-    // runs here, issues #272, #308 and #331; with DLSS on, both consoles ran).
-    let fsr_needs_dlss = asked.fsr_framegen && !available.dlss;
+    // AMD's DLLs, for the upscaler or for frame generation: one loader, and
+    // the effects beside it are what is asked of it. Loaded before the
+    // upscaling decision below, which they can change.
+    let fsr_loaded = (asked.fsr || asked.fsr_framegen) && fsr::init(&asked.fidelityfx_dir);
+    // FSR frame generation needs an upscaling that is not the title's own. DLSS is one, and was
+    // the only one: on Series X the title's own FidelityFX takes the Series S sizes only and the
+    // title fails without DLSS; on Series S, with its own FidelityFX upscaler running beside our
+    // frame generation, the title stopped on a check (0x80000003 at +0x2219650) seconds into the
+    // start (2026-11-27: muted runs here, issues #272, #308 and #331; with DLSS on, both consoles
+    // ran). AMD's own upscaler is the other (`VICTORY_FSR=1`): it does the upscaling the title
+    // asked for, so frame generation has the same inputs DLSS gives it, on a card without DLSS.
+    let fsr_upscaling = asked.fsr && fsr_loaded && fsr::upscaling_loaded();
+    let fsr_needs_dlss = asked.fsr_framegen && !available.dlss && !fsr_upscaling;
     if fsr_needs_dlss {
         tracing::warn!(
-            "FSR 3 frame generation stays off: it needs DLSS for the upscaling, which is off, or this card or these files do not give; without it the title stops at the start"
+            "FSR frame generation stays off: it needs an upscaling of ours (DLSS, or VICTORY_FSR=1 with AMD's upscaler in the folder); without one the title stops at the start"
         );
     }
-    // AMD's DLLs, for the upscaler or for frame generation: one loader, and
-    // the effects beside it are what is asked of it.
-    let fsr_loaded = (asked.fsr || asked.fsr_framegen) && fsr::init(&asked.fidelityfx_dir);
     let fsr_framegen = asked.fsr_framegen && !fsr_needs_dlss && fsr_loaded;
     let fsr_upscale = if !asked.fsr {
         false
-    } else if fsr_loaded && fsr::upscaling_loaded() {
+    } else if fsr_upscaling {
         FSR_UPSCALE.store(true, Release);
         tracing::info!(
             folder = %asked.fidelityfx_dir.display(),
