@@ -15,61 +15,197 @@ namespace VIctoryLauncher
     {
         // PayDrop palette: deep plum, a magenta glow, butter yellow as the one accent (the main button,
         // switches on), peach and hot pink beside it, white hairlines and orbit rings.
-        public static readonly Color Back = Color.FromArgb(36, 12, 32);
-        public static readonly Color Side = Color.FromArgb(28, 9, 25);
-        public static readonly Color Card = Color.FromArgb(46, 17, 41);
-        public static readonly Color CardHover = Color.FromArgb(58, 22, 52);
-        public static readonly Color Selected = Color.FromArgb(82, 26, 68);
-        public static readonly Color Line = Color.FromArgb(82, 55, 77);
+        public static Color Back = Color.FromArgb(36, 12, 32);
+        public static Color Side = Color.FromArgb(28, 9, 25);
+        public static Color Card = Color.FromArgb(46, 17, 41);
+        public static Color CardHover = Color.FromArgb(58, 22, 52);
+        public static Color Selected = Color.FromArgb(82, 26, 68);
+        public static Color Line = Color.FromArgb(82, 55, 77);
         // The one accent (the names stay from the older themes: Pink, Cyan are the accent, Violet its pressed side).
-        public static readonly Color Pink = Color.FromArgb(255, 244, 163);
-        public static readonly Color Violet = Color.FromArgb(236, 220, 120);
-        public static readonly Color Cyan = Color.FromArgb(255, 244, 163);
-        public static readonly Color AccentHover = Color.FromArgb(255, 249, 200);
+        public static Color Pink = Color.FromArgb(255, 244, 163);
+        public static Color Violet = Color.FromArgb(236, 220, 120);
+        public static Color Cyan = Color.FromArgb(255, 244, 163);
+        public static Color AccentHover = Color.FromArgb(255, 249, 200);
         // Text drawn on the accent.
-        public static readonly Color OnAccent = Color.FromArgb(42, 10, 36);
-        public static readonly Color Text = Color.FromArgb(255, 246, 252);
-        public static readonly Color Dim = Color.FromArgb(214, 186, 206);
+        public static Color OnAccent = Color.FromArgb(42, 10, 36);
+        public static Color Text = Color.FromArgb(255, 246, 252);
+        public static Color Dim = Color.FromArgb(214, 186, 206);
         // Text between the two: descriptions that still need to read well.
-        public static readonly Color Soft = Color.FromArgb(236, 220, 231);
-        public static readonly Color Good = Color.FromArgb(255, 244, 163);
-        public static readonly Color Warn = Color.FromArgb(255, 150, 136);
-        public static readonly Color Bad = Color.FromArgb(255, 110, 140);
+        public static Color Soft = Color.FromArgb(236, 220, 231);
+        public static Color Good = Color.FromArgb(255, 244, 163);
+        public static Color Warn = Color.FromArgb(255, 150, 136);
+        public static Color Bad = Color.FromArgb(255, 110, 140);
         // PayDrop's other colours: the hot pink and the peach of its milestone dots.
-        public static readonly Color HotPink = Color.FromArgb(255, 79, 184);
-        public static readonly Color Peach = Color.FromArgb(255, 178, 166);
-        public static readonly Color Plum = Color.FromArgb(106, 20, 80);
+        public static Color HotPink = Color.FromArgb(255, 79, 184);
+        public static Color Peach = Color.FromArgb(255, 178, 166);
+        public static Color Plum = Color.FromArgb(106, 20, 80);
         // Switches: the track when off, hovered, disabled; a disabled knob.
-        public static readonly Color TrackOff = Color.FromArgb(96, 58, 90);
-        public static readonly Color TrackHover = Color.FromArgb(116, 72, 108);
-        public static readonly Color TrackDisabled = Color.FromArgb(62, 34, 57);
-        public static readonly Color KnobDisabled = Color.FromArgb(124, 98, 118);
+        public static Color TrackOff = Color.FromArgb(96, 58, 90);
+        public static Color TrackHover = Color.FromArgb(116, 72, 108);
+        public static Color TrackDisabled = Color.FromArgb(62, 34, 57);
+        public static Color KnobDisabled = Color.FromArgb(124, 98, 118);
         // A quiet fill (an unpicked pill, a segmented track) and a stronger hairline (hover, outlined buttons).
-        public static readonly Color Quiet = Color.FromArgb(74, 36, 66);
-        public static readonly Color LineStrong = Color.FromArgb(150, 112, 142);
+        public static Color Quiet = Color.FromArgb(74, 36, 66);
+        public static Color LineStrong = Color.FromArgb(150, 112, 142);
         // The "Tested" badge.
-        public static readonly Color BadgeBack = Color.FromArgb(92, 28, 76);
-        public static readonly Color BadgeText = Color.FromArgb(255, 168, 222);
+        public static Color BadgeBack = Color.FromArgb(92, 28, 76);
+        public static Color BadgeText = Color.FromArgb(255, 168, 222);
         // Hover fill of a side-bar button, a checked option's border, the lilac of the charts' fourth colour.
-        public static readonly Color NavHover = Color.FromArgb(44, 16, 40);
-        public static readonly Color CardOn = Color.FromArgb(150, 92, 134);
-        public static readonly Color Lilac = Color.FromArgb(206, 164, 255);
+        public static Color NavHover = Color.FromArgb(44, 16, 40);
+        public static Color CardOn = Color.FromArgb(150, 92, 134);
+        public static Color Lilac = Color.FromArgb(206, 164, 255);
         // A faint white wash (chips, zebra rows), a switch knob, the soft shadow under it.
-        public static readonly Color Wash = Color.FromArgb(34, 255, 255, 255);
-        public static readonly Color Stripe = Color.FromArgb(14, 255, 255, 255);
-        public static readonly Color Knob = Color.White;
-        public static readonly Color Shadow = Color.FromArgb(46, 0, 0, 0);
+        public static Color Wash = Color.FromArgb(34, 255, 255, 255);
+        public static Color Stripe = Color.FromArgb(14, 255, 255, 255);
+        public static Color Knob = Color.White;
+        public static Color Shadow = Color.FromArgb(46, 0, 0, 0);
         // The backdrop's glows and rings.
-        public static readonly Color GlowMagenta = Color.FromArgb(224, 64, 168);
-        public static readonly Color GlowPeach = Color.FromArgb(255, 170, 160);
-        public static readonly Color Ring = Color.FromArgb(150, 255, 255, 255);
+        public static Color GlowMagenta = Color.FromArgb(224, 64, 168);
+        public static Color GlowPeach = Color.FromArgb(255, 170, 160);
+        public static Color Ring = Color.FromArgb(150, 255, 255, 255);
         // Hairlines and quiet text of the editorial look: a rule on the plum page, a white hairline for the posters,
         // the thin outline of a ghost button, the muted lavender of a label's second line, an even fainter one.
-        public static readonly Color Rule = Color.FromArgb(66, 42, 61);
-        public static readonly Color HairWhite = Color.FromArgb(58, 255, 255, 255);
-        public static readonly Color Outline = Color.FromArgb(120, 255, 255, 255);
-        public static readonly Color Muted = Color.FromArgb(182, 152, 176);
-        public static readonly Color Faint = Color.FromArgb(142, 114, 136);
+        public static Color Rule = Color.FromArgb(66, 42, 61);
+        public static Color HairWhite = Color.FromArgb(58, 255, 255, 255);
+        public static Color Outline = Color.FromArgb(120, 255, 255, 255);
+        public static Color Muted = Color.FromArgb(182, 152, 176);
+        public static Color Faint = Color.FromArgb(142, 114, 136);
+        // The base of overlays drawn over the page (hover washes, glass chips, rings): white on the dark
+        // themes, black on the light one.
+        public static Color Ink = Color.White;
+        // A third glow of the page's backdrop.
+        public static Color Glow2 = Color.FromArgb(246, 74, 196);
+        // Whether the theme is dark (the window's title bar follows it), and whether the headline's second
+        // run is the italic serif (Plum's editorial look) or the interface's own type.
+        public static bool Dark = true, SerifAccent = true;
+        public static string Current = "plum";
+
+        // ---------------------------------------------------------------- themes
+        // launcher.ini's theme=. The colours above are Plum's; Use sets the others before any window is made
+        // (Program.Main), and the picker in the side bar restarts the launcher to change it.
+        public static readonly string[] Names = { "plum", "midnight", "vice", "graphite", "daylight" };
+
+        public static string Label(string name, int lang)
+        {
+            switch (name)
+            {
+                case "midnight": return new[] { "Midnight", "Meia-noite", "Minuit" }[lang];
+                case "vice": return "Vice";
+                case "graphite": return new[] { "Graphite", "Grafite", "Graphite" }[lang];
+                case "daylight": return new[] { "Daylight", "Dia", "Jour" }[lang];
+                default: return new[] { "Plum", "Ameixa", "Prune" }[lang];
+            }
+        }
+
+        // The two colours the picker shows for a theme: its page and its accent.
+        public static Color PreviewBack(string name)
+        {
+            switch (name)
+            {
+                case "midnight": return C(12, 17, 27);
+                case "vice": return C(16, 10, 24);
+                case "graphite": return C(20, 20, 22);
+                case "daylight": return C(246, 247, 250);
+                default: return C(36, 12, 32);
+            }
+        }
+        public static Color PreviewAccent(string name)
+        {
+            switch (name)
+            {
+                case "midnight": return C(56, 189, 248);
+                case "vice": return C(255, 92, 170);
+                case "graphite": return C(255, 145, 60);
+                case "daylight": return C(37, 99, 235);
+                default: return C(255, 244, 163);
+            }
+        }
+
+        static Color C(int r, int g, int b) { return Color.FromArgb(r, g, b); }
+        static Color A(int a, int r, int g, int b) { return Color.FromArgb(a, r, g, b); }
+
+        public static void Use(string name)
+        {
+            if (Array.IndexOf(Names, name) < 0) name = "plum";
+            Current = name;
+            switch (name)
+            {
+                case "midnight":
+                    // Night navy, one clear cyan.
+                    Set(C(12, 17, 27), C(9, 13, 21), C(19, 26, 39), C(26, 35, 52), C(20, 52, 74), C(37, 48, 66),
+                        C(56, 189, 248), C(14, 145, 210), C(125, 211, 252), C(4, 20, 32),
+                        C(232, 238, 246), C(148, 163, 184), C(203, 213, 225), C(74, 222, 128), C(251, 191, 36), C(248, 113, 113),
+                        C(244, 114, 182), C(147, 197, 253), C(30, 58, 95),
+                        C(51, 65, 85), C(71, 85, 105), C(30, 41, 59), C(100, 116, 139), C(30, 41, 59), C(100, 116, 139),
+                        C(12, 64, 96), C(125, 211, 252), C(17, 24, 36), C(56, 130, 170), C(167, 139, 250),
+                        C(14, 116, 190), C(99, 102, 241), C(56, 189, 248), C(30, 39, 54), C(148, 163, 184), C(100, 116, 139), true);
+                    SerifAccent = false;
+                    break;
+                case "vice":
+                    // A Vice City night: deep purple-black, hot pink, a teal second colour, a sunset glow.
+                    Set(C(16, 10, 24), C(11, 7, 17), C(27, 18, 40), C(36, 24, 52), C(58, 22, 66), C(56, 40, 74),
+                        C(255, 92, 170), C(230, 60, 145), C(255, 140, 200), C(28, 6, 20),
+                        C(250, 242, 255), C(190, 170, 205), C(228, 214, 238), C(64, 232, 214), C(255, 184, 92), C(255, 96, 120),
+                        C(255, 112, 96), C(64, 232, 214), C(70, 28, 96),
+                        C(72, 52, 94), C(92, 68, 118), C(44, 30, 60), C(120, 100, 140), C(48, 32, 66), C(140, 110, 165),
+                        C(70, 24, 72), C(255, 160, 210), C(24, 16, 36), C(180, 80, 150), C(64, 232, 214),
+                        C(236, 52, 160), C(255, 130, 70), C(40, 200, 220), C(44, 30, 60), C(176, 154, 196), C(130, 110, 150), true);
+                    SerifAccent = false;
+                    break;
+                case "graphite":
+                    // Neutral charcoal with a warm orange.
+                    Set(C(20, 20, 22), C(15, 15, 17), C(30, 30, 33), C(40, 40, 44), C(64, 42, 22), C(50, 50, 55),
+                        C(255, 145, 60), C(232, 118, 36), C(255, 178, 110), C(32, 16, 4),
+                        C(242, 242, 244), C(160, 160, 168), C(212, 212, 218), C(120, 220, 150), C(255, 196, 90), C(255, 108, 108),
+                        C(255, 108, 96), C(255, 196, 140), C(60, 44, 32),
+                        C(62, 62, 68), C(80, 80, 88), C(40, 40, 44), C(110, 110, 118), C(44, 44, 48), C(110, 110, 118),
+                        C(70, 44, 20), C(255, 190, 130), C(26, 26, 29), C(180, 110, 50), C(170, 150, 255),
+                        C(200, 90, 30), C(90, 90, 100), C(255, 140, 50), C(38, 38, 42), C(150, 150, 158), C(108, 108, 116), true);
+                    SerifAccent = false;
+                    break;
+                case "daylight":
+                    // Light: white cards on a soft grey page, one blue.
+                    Set(C(246, 247, 250), C(236, 238, 243), C(255, 255, 255), C(241, 243, 247), C(225, 236, 255), C(218, 222, 230),
+                        C(37, 99, 235), C(29, 78, 216), C(59, 130, 246), C(255, 255, 255),
+                        C(17, 24, 39), C(100, 110, 125), C(55, 65, 81), C(22, 163, 74), C(217, 119, 6), C(220, 38, 38),
+                        C(219, 39, 119), C(96, 165, 250), C(219, 234, 254),
+                        C(203, 213, 225), C(176, 190, 210), C(226, 232, 240), C(148, 163, 184), C(233, 236, 242), C(148, 163, 184),
+                        C(219, 234, 254), C(29, 78, 216), C(229, 232, 239), C(96, 165, 250), C(139, 92, 246),
+                        C(147, 197, 253), C(196, 181, 253), C(191, 219, 254), C(226, 230, 236), C(107, 114, 128), C(156, 163, 175), false);
+                    SerifAccent = false;
+                    break;
+                default:
+                    break; // Plum: the colours as declared above.
+            }
+        }
+
+        // Every colour of a theme at once, in the order the fields are declared above (the accent is Pink and
+        // Cyan both; the washes and hairlines follow the theme's lightness).
+        static void Set(Color back, Color side, Color card, Color cardHover, Color selected, Color line,
+            Color accent, Color pressed, Color accentHover, Color onAccent,
+            Color text, Color dim, Color soft, Color good, Color warn, Color bad,
+            Color hotPink, Color peach, Color plum,
+            Color trackOff, Color trackHover, Color trackDisabled, Color knobDisabled, Color quiet, Color lineStrong,
+            Color badgeBack, Color badgeText, Color navHover, Color cardOn, Color lilac,
+            Color glow1, Color glow2, Color glow3, Color rule, Color muted, Color faint, bool dark)
+        {
+            Back = back; Side = side; Card = card; CardHover = cardHover; Selected = selected; Line = line;
+            Pink = accent; Cyan = accent; Violet = pressed; AccentHover = accentHover; OnAccent = onAccent;
+            Text = text; Dim = dim; Soft = soft; Good = good; Warn = warn; Bad = bad;
+            HotPink = hotPink; Peach = peach; Plum = plum;
+            TrackOff = trackOff; TrackHover = trackHover; TrackDisabled = trackDisabled; KnobDisabled = knobDisabled; Quiet = quiet; LineStrong = lineStrong;
+            BadgeBack = badgeBack; BadgeText = badgeText; NavHover = navHover; CardOn = cardOn; Lilac = lilac;
+            GlowMagenta = glow1; GlowPeach = glow2; Glow2 = glow3; Rule = rule; Muted = muted; Faint = faint;
+            Dark = dark;
+            Ink = dark ? Color.White : Color.Black;
+            Knob = Color.White;
+            Wash = dark ? A(30, 255, 255, 255) : A(14, 0, 0, 0);
+            Stripe = dark ? A(12, 255, 255, 255) : A(8, 0, 0, 0);
+            Shadow = dark ? A(50, 0, 0, 0) : A(34, 0, 0, 0);
+            Ring = dark ? A(110, 255, 255, 255) : A(60, 0, 0, 0);
+            HairWhite = dark ? A(42, 255, 255, 255) : A(30, 0, 0, 0);
+            Outline = dark ? A(110, 255, 255, 255) : A(70, 0, 0, 0);
+        }
 
         // What a control paints first: the glow of the poster it sits on, or its parent's colour.
         public static void ClearBack(Control c, Graphics g)
@@ -136,13 +272,16 @@ namespace VIctoryLauncher
             var f = Fx.MetaFont;
             using (var sf = new StringFormat { Alignment = align, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap, HotkeyPrefix = System.Drawing.Text.HotkeyPrefix.None })
             {
-                using (var b = new SolidBrush(Text)) g.DrawString(label ?? "", f, b, new RectangleF(box.X, box.Y, box.Width, 16), sf);
-                using (var b = new SolidBrush(valueColor)) g.DrawString(value ?? "", f, b, new RectangleF(box.X, box.Y + 16, box.Width, 16), sf);
+                // The label quiet, the value (what is read) in the text colour unless it carries a meaning of its own.
+                using (var b = new SolidBrush(Muted)) g.DrawString(label ?? "", f, b, new RectangleF(box.X, box.Y, box.Width, 16), sf);
+                using (var vf = Theme.UiBold(8.75f))
+                using (var b = new SolidBrush(valueColor == Muted || valueColor == Dim || valueColor == Soft ? Text : valueColor)) g.DrawString(value ?? "", vf, b, new RectangleF(box.X, box.Y + 16, box.Width, 18), sf);
             }
         }
 
         // The badge an option tested by the developers shows (set to the form's language).
         public static string TestedText = "Tested";
+        public static string ExperimentalText = "Experimental";
 
         // A keyboard focus ring (Tab) just inside a control's edge.
         public static void FocusRing(Graphics g, RectangleF r, float radius, Color c)
@@ -178,7 +317,7 @@ namespace VIctoryLauncher
             {
                 double a = d.Item2 * Math.PI / 180.0;
                 float x = ox + (float)Math.Cos(a) * d.Item1, y = oy + (float)Math.Sin(a) * d.Item1;
-                using (var halo = new SolidBrush(Color.FromArgb(60, 255, 255, 255))) g.FillEllipse(halo, x - 9, y - 9, 18, 18);
+                using (var halo = new SolidBrush(Color.FromArgb(60, Theme.Ink))) g.FillEllipse(halo, x - 9, y - 9, 18, 18);
                 using (var b = new SolidBrush(d.Item3)) g.FillEllipse(b, x - 6, y - 6, 12, 12);
             }
         }
@@ -234,6 +373,37 @@ namespace VIctoryLauncher
                 using (var b = new SolidBrush(fill)) g.FillPath(b, path);
                 using (var p = new Pen(border)) g.DrawPath(p, path);
             }
+        }
+    }
+
+    // A theme in the side bar's picker: a circle of the theme's page colour with its accent inside, a ring
+    // around the one in use, a lighter ring on hover. Its name is its tooltip.
+    class ThemeDot : Control
+    {
+        public string ThemeName = "plum";
+        bool hover;
+        public ThemeDot()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
+            Size = new Size(30, 30);
+            Cursor = Cursors.Hand;
+        }
+        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.Clear(Parent != null ? Parent.BackColor : Theme.Side);
+            Theme.Smooth(g);
+            bool on = ThemeName == Theme.Current;
+            var outer = new RectangleF(2, 2, Width - 5, Height - 5);
+            if (on || hover)
+                using (var p = new Pen(on ? Theme.Cyan : Theme.LineStrong, on ? 2f : 1.2f)) g.DrawEllipse(p, outer);
+            var disc = new RectangleF(6, 6, Width - 13, Height - 13);
+            using (var b = new SolidBrush(Theme.PreviewBack(ThemeName))) g.FillEllipse(b, disc);
+            using (var p = new Pen(Color.FromArgb(70, Theme.Ink))) g.DrawEllipse(p, disc);
+            // The accent as the lower right half of the disc.
+            using (var b = new SolidBrush(Theme.PreviewAccent(ThemeName))) g.FillPie(b, disc.X, disc.Y, disc.Width, disc.Height, -45f, 180f);
         }
     }
 
@@ -518,23 +688,32 @@ namespace VIctoryLauncher
             if (!kn.Running) kn.Set(Checked ? 1f : 0f);
             float h = Enabled ? hv.V : 0f, d = Enabled ? dn.V : 0f;
             if (h > 0.01f || d > 0.01f)
-                using (var b = new SolidBrush(Color.FromArgb((int)(12 * h + 10 * d), 255, 255, 255))) g.FillRectangle(b, 0, 0, Width, Height - 1);
+                using (var b = new SolidBrush(Color.FromArgb((int)(12 * h + 10 * d), Theme.Ink))) g.FillRectangle(b, 0, 0, Width, Height - 1);
             using (var p = new Pen(Fx.Lerp(Theme.Rule, Theme.LineStrong, h * 0.5f))) g.DrawLine(p, 0, Height - 1, Width, Height - 1);
             if (Focused && ShowFocusCues && Enabled) Theme.FocusRing(g, new RectangleF(1.5f, 1.5f, Width - 3f, Height - 4f), 6, Theme.Cyan);
             const int sw = 38;
             Toggle.DrawSwitch(g, new RectangleF(Width - sw - 4, (int)((Height - 1 - 22) / 2), sw, 22), kn.V, h, Enabled, d);
             var title = Text ?? "";
             bool tested = title.StartsWith("★");
+            // "◇": not tested in the game yet, marked EXPERIMENTAL in the warning colour.
+            bool trial = !tested && title.StartsWith("◇");
             if (tested) title = title.TrimStart('★', ' ');
+            if (trial) title = title.TrimStart('◇', ' ');
             float textW = Math.Max(20, Width - sw - 4 - 16);
             using (var b = new SolidBrush(Enabled ? Theme.Text : Theme.Dim))
             using (var f = new StringFormat(StringFormat.GenericTypographic) { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap, LineAlignment = StringAlignment.Near, HotkeyPrefix = System.Drawing.Text.HotkeyPrefix.None })
             using (var tf = Theme.UiBold(6.75f))
             {
-                string mark = tested ? Theme.TestedText.ToUpperInvariant() : "";
-                float markW = tested ? Theme.TrackedWidth(g, mark, tf, 1.1f) + 14 : 0;
+                string mark = tested ? Theme.TestedText.ToUpperInvariant() : trial ? Theme.ExperimentalText.ToUpperInvariant() : "";
+                float markW = tested || trial ? Theme.TrackedWidth(g, mark, tf, 1.1f) + 14 : 0;
                 float tw = Math.Min(Theme.TextW(g, title, Font), textW - markW);
                 g.DrawString(title, Font, b, new RectangleF(2, 10, Math.Max(10, tw + 2), 22), f);
+                if (trial && Enabled)
+                {
+                    float mx = 2 + tw + 9;
+                    using (var db = new SolidBrush(Theme.Warn)) g.FillEllipse(db, mx, 15.5f, 5, 5);
+                    using (var mb = new SolidBrush(Theme.Warn)) Theme.Tracked(g, mark, tf, mb, mx + 10, 14, 1.1f);
+                }
                 if (tested && Enabled)
                 {
                     // The tested mark: a small butter dot and the word in the eyebrow style.
@@ -680,11 +859,11 @@ namespace VIctoryLauncher
                 if (Focused && ShowFocusCues && Enabled) Theme.FocusRing(g, new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 6, Theme.Cyan);
                 return;
             }
-            if (!Enabled) Theme.Panel(g, r, Theme.Wash, Color.FromArgb(60, 255, 255, 255), pr);
+            if (!Enabled) Theme.Panel(g, r, Theme.Wash, Color.FromArgb(60, Theme.Ink), pr);
             else
             {
-                Color ghostFill = Color.FromArgb((int)(22 * h + 20 * d), 255, 255, 255);
-                Color ghostEdge = Fx.Lerp(Theme.Outline, Color.FromArgb(235, 255, 255, 255), hd);
+                Color ghostFill = Color.FromArgb((int)(22 * h + 20 * d), Theme.Ink);
+                Color ghostEdge = Fx.Lerp(Theme.Outline, Color.FromArgb(235, Theme.Ink), hd);
                 Color mainFill = Fx.Lerp(Fx.Lerp(Theme.Cyan, Theme.AccentHover, h), Theme.Violet, d);
                 Theme.Panel(g, r, Fx.Lerp(ghostFill, mainFill, m), Fx.Lerp(ghostEdge, mainFill, m), pr);
                 if (sweep >= 0f && m > 0.9f)
@@ -869,7 +1048,7 @@ namespace VIctoryLauncher
                 g.Clear(Theme.Back);
                 Theme.Smooth(g);
                 Theme.Glow(g, Width * 0.20f + gMx, Height * 0.62f + gMy, Width * 0.55f * rk, Height * 0.98f * rk, Theme.GlowMagenta, (int)(170 * ak));
-                Theme.Glow(g, Width * 0.17f + gMx * 1.5f, Height * 0.68f + gMy * 1.5f, Width * 0.26f * rk, Height * 0.60f * rk, Color.FromArgb(246, 74, 196), (int)(120 * ak));
+                Theme.Glow(g, Width * 0.17f + gMx * 1.5f, Height * 0.68f + gMy * 1.5f, Width * 0.26f * rk, Height * 0.60f * rk, Theme.Glow2, (int)(120 * ak));
                 Theme.Glow(g, Width * 0.98f + gPx, Height * 0.02f + gPy, Width * 0.32f * sk, Height * 0.80f * sk, Theme.GlowPeach, (int)(112 * bk));
                 int fade = Math.Min(96, Height / 2);
                 using (var b = new LinearGradientBrush(new Rectangle(0, Height - fade, Math.Max(1, Width), fade + 1), Color.FromArgb(0, Theme.Back), Theme.Back, 90f))
@@ -893,7 +1072,8 @@ namespace VIctoryLauncher
         }
         // The headline's big type: the heavy word then (a line under it, or after it) the italic serif run in butter.
         public static Font Heavy(float pt) { return new Font("Segoe UI Black", pt); }
-        public static Font Serif(float pt) { return new Font("Georgia", pt, FontStyle.Italic); }
+        // Plum keeps its italic serif; the other themes write the second run in the interface's own type.
+        public static Font Serif(float pt) { return Theme.SerifAccent ? new Font("Georgia", pt, FontStyle.Italic) : new Font("Segoe UI Semibold", pt); }
     }
 
     // The head of the Play page, as a poster: tiny two-line labels along the top and bottom rules, the giant
@@ -925,8 +1105,8 @@ namespace VIctoryLauncher
         readonly float[] bx = new float[3], by = new float[3], br2 = new float[3];
         const int BN = 64;
         static readonly Pen ringPen = new Pen(Theme.Ring, 1f);
-        static readonly Pen arcSoft = new Pen(Color.FromArgb(64, 255, 255, 255), 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
-        static readonly Pen arcBright = new Pen(Color.FromArgb(200, 255, 255, 255), 2.2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        static readonly Pen arcSoft = new Pen(Color.FromArgb(64, Theme.Ink), 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        static readonly Pen arcBright = new Pen(Color.FromArgb(200, Theme.Ink), 2.2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
 
         public Hero()
         {
@@ -941,10 +1121,15 @@ namespace VIctoryLauncher
             base.Dispose(disposing);
         }
 
+        // The readiness card at the right of the headline (it used to be the orbit; the name stays for the
+        // invalidations that animate it).
+        public string StepsTitle = "Ready to play";
+        const int CardW = 360;
+        RectangleF StepsRect() { return new RectangleF(Width - 40 - CardW, TopRule + 26, CardW, BottomRule - TopRule - 52); }
         Rectangle OrbitRect()
         {
-            float cx = Width - 270;
-            return new Rectangle((int)(cx - 176 - 120), TopRule + 1, 2 * (176 + 120), BottomRule - TopRule - 1);
+            var r = StepsRect();
+            return Rectangle.Inflate(Rectangle.Round(r), 26, 8);
         }
         void InvalOrbit() { if (!IsDisposed) Invalidate(OrbitRect()); }
 
@@ -993,8 +1178,8 @@ namespace VIctoryLauncher
             gPx = Q(-Width * 0.024 * Math.Sin(t * tau / 43.0 + 2.1) + Width * 0.010 * Math.Sin(t * tau / 27.0));
             gPy = Q(Height * 0.080 * Math.Sin(t * tau / 41.0 + 0.2));
             leanX += (tLeanX - leanX) * 0.16f; leanY += (tLeanY - leanY) * 0.16f;
-            UpdateBlob(t);
-            if (BackKey() != before) Invalidate(); else Invalidate(OrbitRect());
+            // Only the glows breathe now: the page is redrawn when they moved, nothing otherwise.
+            if (BackKey() != before) Invalidate();
             return 50;
         }
 
@@ -1068,7 +1253,7 @@ namespace VIctoryLauncher
                 g.DrawLine(p, 0, TopRule, Width, TopRule);
                 g.DrawLine(p, 0, BottomRule, Width, BottomRule);
             }
-            if (clip.IntersectsWith(OrbitRect())) DrawOrbits(g);
+            if (clip.IntersectsWith(OrbitRect())) DrawSteps(g);
             if (clip.IntersectsWith(new Rectangle(0, TopRule, Math.Max(10, Width - 440), BottomRule - TopRule)))
             {
                 g.TranslateTransform(0, (1f - k) * 10f);
@@ -1114,79 +1299,75 @@ namespace VIctoryLauncher
             }
         }
 
-        // Two thin rings between the rules (a brighter arc turns on each), the liquid blob in the middle and
-        // the steps as translucent chips drifting on the rings.
-        void DrawOrbits(Graphics g)
+        // The readiness card: a title with "3/4" and a thin progress bar, then the four steps as rows. A step's
+        // circle fills with the accent and shows a tick when it is done (a ring spreads from it the moment it
+        // turns done), is outlined in the warning colour while it is missing, faint while not known.
+        static Font stepTitleFont, stepNameFont, stepDetailFont, tickFont;
+        void DrawSteps(Graphics g)
         {
-            float cx = Width - 270, cy = (TopRule + BottomRule) / 2f + 4;
-            float r1 = 176, r2 = 110;
-            double t = orbitT;
-            var st = g.Save();
-            g.SetClip(new RectangleF(0, TopRule + 1, Width, BottomRule - TopRule - 1), CombineMode.Intersect);
-            g.DrawEllipse(ringPen, cx - r1, cy - r1, r1 * 2, r1 * 2);
-            g.DrawEllipse(ringPen, cx - r2, cy - r2, r2 * 2, r2 * 2);
-            float a1 = (float)(t * 4.0 % 360.0), a2 = (float)(150.0 - t * 6.5 % 360.0);
-            g.DrawArc(arcSoft, cx - r1, cy - r1, r1 * 2, r1 * 2, a1, 84f);
-            g.DrawArc(arcBright, cx - r1, cy - r1, r1 * 2, r1 * 2, a1 + 60f, 24f);
-            g.DrawArc(arcSoft, cx - r2, cy - r2, r2 * 2, r2 * 2, a2, 70f);
-            g.DrawArc(arcBright, cx - r2, cy - r2, r2 * 2, r2 * 2, a2 + 48f, 22f);
-            if (blob == null) UpdateBlob(t);
-            if (blob != null)
+            if (stepTitleFont == null) { stepTitleFont = Theme.UiBold(11f); stepNameFont = Theme.UiBold(9.75f); stepDetailFont = Theme.Ui(8.75f); tickFont = Theme.UiBold(8f); }
+            var r = StepsRect();
+            if (r.Width < 120 || r.Height < 120) return;
+            // A soft shadow, then the card.
+            using (var path = Theme.Round(new RectangleF(r.X, r.Y + 6, r.Width, r.Height), 16))
+            using (var b = new SolidBrush(Theme.Shadow)) g.FillPath(b, path);
+            Theme.Panel(g, r, Fx.Alpha(Theme.Card, Theme.Dark ? 0.86f : 0.97f), Theme.Line, 16);
+            int n = Math.Min(4, Steps.Length), done = 0;
+            for (int i = 0; i < n && i < states.Length; i++) if (states[i] == 1) done++;
+            float pad = 20;
+            using (var sf = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter })
             {
-                float bcx = cx + 70 + leanX, bcy = cy + 34 + leanY + 3f * (float)Math.Sin(t * 0.45);
-                var old = g.InterpolationMode;
-                g.InterpolationMode = InterpolationMode.HighQualityBilinear;
-                g.DrawImage(blob, new RectangleF(bcx - 80, bcy - 80, 160, 160));
-                g.InterpolationMode = old;
+                using (var b = new SolidBrush(Theme.Text)) g.DrawString(StepsTitle ?? "", stepTitleFont, b, new RectangleF(r.X + pad, r.Y + 16, r.Width - 2 * pad - 50, 22), sf);
+                var count = done + "/" + n;
+                using (var b = new SolidBrush(done == n && n > 0 ? Theme.Cyan : Theme.Muted))
+                using (var far = new StringFormat(sf) { Alignment = StringAlignment.Far })
+                    g.DrawString(count, stepTitleFont, b, new RectangleF(r.Right - pad - 60, r.Y + 16, 60, 22), far);
             }
-            g.Restore(st);
-            // On the rings: #01 outer left, #02 inner right, #03 inner below, #04 outer lower right; each drifts a
-            // few degrees to and fro on its ring (slowly: a period of a minute or more).
-            double[][] spots = {
-                new[] { r1, 205.0, -8.0, 11.0, 83.0, 0.0 }, new[] { r2, 335.0, 9.0, 14.0, 71.0, 1.7 }, new[] { r2, 140.0, -9.0, 14.0, 97.0, 3.1 }, new[] { r1, 25.0, 8.0, 8.0, 77.0, 4.4 },
-            };
-            for (int i = 0; i < spots.Length && i < Steps.Length; i++)
+            // The progress bar.
+            var track = new RectangleF(r.X + pad, r.Y + 44, r.Width - 2 * pad, 4);
+            using (var path = Theme.Round(track, 2)) using (var b = new SolidBrush(Theme.Quiet)) g.FillPath(b, path);
+            float part = n == 0 ? 0f : 0f;
+            for (int i = 0; i < n && i < 4; i++) part += dot[i].V / n;
+            if (part > 0.005f)
+                using (var path = Theme.Round(new RectangleF(track.X, track.Y, Math.Max(4, track.Width * part), track.Height), 2))
+                using (var b = new SolidBrush(Theme.Cyan)) g.FillPath(b, path);
+            // The rows.
+            float top = r.Y + 60, rowH = (r.Bottom - 10 - top) / Math.Max(1, n);
+            for (int i = 0; i < n; i++)
             {
-                double a = (spots[i][1] + spots[i][3] * Math.Sin(t * 2 * Math.PI / spots[i][4] + spots[i][5])) * Math.PI / 180.0;
-                float x = cx + (float)(Math.Cos(a) * spots[i][0]), y = cy + (float)(Math.Sin(a) * spots[i][0]);
-                Chip(g, x, y, (float)spots[i][2], "#" + (i + 1).ToString("00") + " " + (i < StepNames.Length ? StepNames[i] : ""), Steps[i], i < states.Length ? states[i] : -1, i < 4 ? dot[i].V : 0f, i < 4 ? burst[i].V : 1f, i < 4 && burst[i].Running);
+                float y = top + i * rowH, cy = y + rowH / 2f;
+                if (i > 0) using (var p = new Pen(Theme.Rule)) g.DrawLine(p, r.X + pad, y, r.Right - pad, y);
+                int state = i < states.Length ? states[i] : -1;
+                float fill = i < 4 ? dot[i].V : 0f, cx = r.X + pad + 9;
+                if (i < 4 && burst[i].Running)
+                {
+                    float rr = 9f + 10f * Fx.Out(burst[i].V);
+                    using (var p = new Pen(Fx.Alpha(Theme.Cyan, 1f - burst[i].V), 2f)) g.DrawEllipse(p, cx - rr, cy - rr, rr * 2, rr * 2);
+                }
+                var ring = state == 0 ? Theme.HotPink : state == 1 ? Theme.Cyan : Theme.Faint;
+                using (var p = new Pen(ring, 1.6f)) g.DrawEllipse(p, cx - 9, cy - 9, 18, 18);
+                if (fill > 0.01f)
+                {
+                    float d = 18f * fill;
+                    using (var b = new SolidBrush(Theme.Cyan)) g.FillEllipse(b, cx - d / 2, cy - d / 2, d, d);
+                    if (fill > 0.6f)
+                        using (var b = new SolidBrush(Fx.Alpha(Theme.OnAccent, (fill - 0.6f) / 0.4f)))
+                        using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                            g.DrawString("✓", tickFont, b, new RectangleF(cx - 9, cy - 9, 18, 18), sf);
+                }
+                else if (state == 0)
+                    using (var b = new SolidBrush(Fx.Alpha(Theme.HotPink, 0.18f))) g.FillEllipse(b, cx - 9, cy - 9, 18, 18);
+                float tx = cx + 20;
+                using (var sf = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter, LineAlignment = StringAlignment.Center })
+                {
+                    var name = i < StepNames.Length ? StepNames[i] : "";
+                    float nameW = Math.Min(110, Theme.TextW(g, name, stepNameFont) + 4);
+                    using (var b = new SolidBrush(Theme.Text)) g.DrawString(name, stepNameFont, b, new RectangleF(tx, cy - 11, nameW, 22), sf);
+                    using (var b = new SolidBrush(state == 0 ? Theme.HotPink : Theme.Muted))
+                    using (var far = new StringFormat(sf) { Alignment = StringAlignment.Far })
+                        g.DrawString(Steps[i] ?? "", stepDetailFont, b, new RectangleF(tx + nameW + 8, cy - 11, r.Right - pad - (tx + nameW + 8), 22), far);
+                }
             }
-        }
-
-        static void Chip(Graphics g, float cx, float cy, float rot, string name, string detail, int state, float fill, float burstK, bool bursting)
-        {
-            var nf = Fx.ChipName; var df = Fx.ChipDetail;
-            float w = Math.Max(Theme.TextW(g, name, nf), Theme.TextW(g, detail ?? "", df)) + 52, h = 42;
-            var saved = g.Save();
-            g.TranslateTransform(cx, cy);
-            g.RotateTransform(rot);
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-            var r = new RectangleF(-w / 2, -h / 2, w, h);
-            using (var path = Theme.Round(r, h / 2))
-            {
-                using (var b = new SolidBrush(Color.FromArgb(62, 255, 255, 255))) g.FillPath(b, path);
-                using (var p = new Pen(Color.FromArgb(84, 255, 255, 255))) g.DrawPath(p, path);
-            }
-            // The dot: pink (missing) or grey (unknown) with the butter filling it from the middle when done.
-            var baseDot = state == 0 ? Theme.HotPink : Theme.Dim;
-            float dcx = r.X + 18;
-            if (bursting)
-            {
-                float rr = 10f + 12f * Fx.Out(burstK);
-                using (var p = new Pen(Fx.Alpha(Theme.Cyan, 1f - burstK), 2f)) g.DrawEllipse(p, dcx - rr, -rr, rr * 2, rr * 2);
-            }
-            using (var b = new SolidBrush(baseDot)) g.FillEllipse(b, dcx - 10, -10, 20, 20);
-            if (fill > 0.01f)
-            {
-                float d = 20f * fill;
-                using (var b = new SolidBrush(Theme.Cyan)) g.FillEllipse(b, dcx - d / 2, -d / 2, d, d);
-            }
-            using (var f = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap })
-            {
-                using (var b = new SolidBrush(Theme.Text)) g.DrawString(name, nf, b, r.X + 38, -h / 2 + 6, f);
-                using (var b = new SolidBrush(Theme.Soft)) g.DrawString(detail ?? "", df, b, r.X + 38, -h / 2 + 23, f);
-            }
-            g.Restore(saved);
         }
     }
 

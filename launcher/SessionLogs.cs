@@ -172,9 +172,10 @@ namespace VIctoryLauncher
         string SessionSummary(int code, DateTime started, DateTime ended)
         {
             var h = hw ?? ReadHardware();
-            string options = "";
+            string options = "", folder = null;
             Invoke(new Action(() => {
                 options = string.Join("\r\n", Environment2().Where(kv => kv.Key != "VICTORY_GAME_DIR").Select(kv => kv.Key + "=" + kv.Value).ToArray());
+                folder = gameBox.Text.Trim();
             }));
             var sb = new StringBuilder();
             sb.AppendLine("Julia's Launcher game log");
@@ -185,6 +186,8 @@ namespace VIctoryLauncher
             sb.AppendLine("CPU: " + h.Cpu + "   RAM: " + h.RamGb + " GB   Board: " + h.BoardMaker + " " + h.Board);
             sb.AppendLine("Windows: " + h.Os + "   Disk: " + h.Disk + (h.Laptop ? "   laptop" : ""));
             sb.AppendLine("Shaders cached: " + shaderFiles);
+            sb.AppendLine(ExeLine());
+            sb.AppendLine(GameFolderListing(folder, false));
             sb.AppendLine(string.Format("Played: {0:0.0} min   Ended: {1}", (ended - started).TotalMinutes, code == 0 ? "normally (code 0)" : "with an error (code " + code + ")"));
             return Scrub(sb.ToString()) + "\r\nOptions:\r\n" + Scrub(options);
         }

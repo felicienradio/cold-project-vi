@@ -22,7 +22,7 @@ namespace VIctoryLauncher
     {
         // This launcher's version; a release with a higher one is an update.
         // felicienradio's 0.3.1 with edupode's fixes: above 0.3.1, on edupode's release channel and key.
-        public const string Version = "0.3.16";
+        public const string Version = "0.3.25";
         public const string ManifestUrl = "https://github.com/felicienradio/cold-project-vi/releases/latest/download/manifest.json";
         public const string SignatureUrl = "https://github.com/felicienradio/cold-project-vi/releases/latest/download/manifest.sig";
         public const string DownloadPrefix = "https://github.com/felicienradio/cold-project-vi/releases/download/";
@@ -211,30 +211,80 @@ namespace VIctoryLauncher
                         return;
                     }
                 }
-                foreach (var f in m.Files)
+                // One transaction (28/11/2026): every file is first copied beside the one it replaces (".new"), then
+                // each one in use is moved aside (".bak") and the new one takes its name. If any step fails, every
+                // file gets its old version back, so a full disk or an interrupted copy never leaves a mix of two
+                // versions; the update stays pending and is tried again.
+                launcher = m.Files.Any(f => f.Name == "Julia's Launcher.exe");
+                var others = m.Files.Where(f => f.Name != "Julia's Launcher.exe")
+                    .Select(f => new { From = Path.Combine(pendingDir, f.Name.Replace('/', '\\')), To = Path.Combine(AppDir, f.Name.Replace('/', '\\')), f.Size })
+                    .ToList();
+                long need = m.Files.Sum(f => f.Size) + (64L << 20);
+                try
                 {
-                    var from = Path.Combine(pendingDir, f.Name.Replace('/', '\\'));
-                    if (f.Name == "Julia's Launcher.exe") { launcher = true; continue; }
-                    var to = Path.Combine(AppDir, f.Name.Replace('/', '\\'));
-                    Directory.CreateDirectory(Path.GetDirectoryName(to));
-                    File.Copy(from, to, true);
-                }
-                if (launcher)
-                {
-                    // A running program may be renamed but not overwritten: the new one takes its name.
-                    var me = Application.ExecutablePath;
-                    var old = Path.Combine(root, "Julia's Launcher.old.exe");
-                    if (File.Exists(old)) File.Delete(old);
-                    File.Move(me, old);
-                    try { File.Copy(Path.Combine(pendingDir, "Julia's Launcher.exe"), me, true); }
-                    catch (Exception)
+                    var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(AppDir)));
+                    if (drive.AvailableFreeSpace < need)
                     {
-                        // Never leave the launcher without its program: the old one gets its name back.
-                        try { if (File.Exists(me)) File.Delete(me); } catch (Exception) { }
-                        try { if (!File.Exists(me)) File.Move(old, me); } catch (Exception) { }
-                        throw;
+                        SetUpdateState(string.Format(L("v{0} needs {1} MB free on {2} to install; it is tried again later.", "A v{0} precisa de {1} MB livres em {2} para instalar; tenta outra vez mais tarde.", "v{0} a besoin de {1} Mo libres sur {2} ; nouvel essai plus tard."), m.Version, need >> 20, drive.Name));
+                        return;
                     }
                 }
+                catch (Exception) { } // a drive that cannot be asked: the copies below still check themselves
+                var staged = new List<string>();
+                var swapped = new List<string>();   // targets whose old file is now ".bak" (or that had none)
+                var hadOld = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                string me = Application.ExecutablePath, oldMe = Path.Combine(root, "Julia's Launcher.old.exe");
+                bool meMoved = false;
+                try
+                {
+                    foreach (var o in others)
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(o.To));
+                        foreach (var leftover in new[] { o.To + ".new", o.To + ".bak" }) if (File.Exists(leftover)) File.Delete(leftover);
+                        File.Copy(o.From, o.To + ".new", true);
+                        staged.Add(o.To);
+                        if (new FileInfo(o.To + ".new").Length != o.Size) throw new IOException(Path.GetFileName(o.To) + ": " + L("copied short", "copia incompleta", "copie incomplète"));
+                    }
+                    foreach (var o in others)
+                    {
+                        if (File.Exists(o.To)) { File.Move(o.To, o.To + ".bak"); hadOld.Add(o.To); }
+                        swapped.Add(o.To);
+                        File.Move(o.To + ".new", o.To);
+                    }
+                    if (launcher)
+                    {
+                        // A running program may be renamed but not overwritten: the new one takes its name.
+                        if (File.Exists(oldMe)) File.Delete(oldMe);
+                        File.Move(me, oldMe);
+                        meMoved = true;
+                        File.Copy(Path.Combine(pendingDir, "Julia's Launcher.exe"), me, true);
+                    }
+                }
+                catch (Exception)
+                {
+                    // Everything back as it was, the launcher first: never leave the folder without its program.
+                    if (meMoved)
+                    {
+                        try { if (File.Exists(me)) File.Delete(me); } catch (Exception) { }
+                        try { if (!File.Exists(me)) File.Move(oldMe, me); } catch (Exception) { }
+                    }
+                    var lost = new List<string>();
+                    foreach (var to in swapped)
+                    {
+                        try
+                        {
+                            if (File.Exists(to)) File.Delete(to);
+                            if (hadOld.Contains(to)) File.Move(to + ".bak", to);
+                        }
+                        catch (Exception) { lost.Add(Path.GetFileName(to)); }
+                    }
+                    foreach (var to in staged) try { if (File.Exists(to + ".new")) File.Delete(to + ".new"); } catch (Exception) { }
+                    Log(lost.Count == 0
+                        ? string.Format(L("Update v{0} could not be installed; the previous files were put back.", "O update v{0} nao se instalou; os ficheiros anteriores foram repostos.", "La mise à jour v{0} n'a pas pu s'installer ; les fichiers précédents sont remis."), m.Version)
+                        : string.Format(L("Update v{0} could not be installed, and {1} could not be put back: reinstall with VI-Setup.", "O update v{0} nao se instalou, e {1} nao foi reposto: reinstala com o VI-Setup.", "La mise à jour v{0} n'a pas pu s'installer, et {1} n'a pas pu être remis : réinstalle avec VI-Setup."), m.Version, string.Join(", ", lost)));
+                    throw;
+                }
+                foreach (var to in hadOld) try { File.Delete(to + ".bak"); } catch (Exception) { }
                 Log(string.Format(L("Updated to v{0}.", "Atualizado para a v{0}."), m.Version));
                 // Shaders made by an older translator are made again (the Shaders page shows it).
                 if (m.Files.Any(f => f.Name == "victory.exe")) WriteSetting("shaders", "0");
@@ -313,6 +363,51 @@ namespace VIctoryLauncher
                 catch (Exception) { }
             }
             return false;
+        }
+
+        // The emulator matches this launcher's version: when the launcher is not run from a source folder and its
+        // own update left a checked victory.exe under updates\<this version>, a different victory.exe where updates
+        // install it is replaced by that one (copied beside, swapped, put back if anything fails). An RX 6500 XT
+        // had launcher 0.3.24 with 0.3.21's victory.exe (28/11/2026), so no engine fix since reached it.
+        void RepairEngine()
+        {
+            new Thread(() => {
+                try
+                {
+                    Thread.Sleep(5000);
+                    if (UseAmdEngine) return;
+                    var src = SourceDir;
+                    if (src != null && (root + "\\").StartsWith(src.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)) return;
+                    var good = Path.Combine(Path.GetDirectoryName(dataRoot), "updates", Updater.Version, "victory.exe");
+                    var target = Path.Combine(AppDir, "victory.exe");
+                    if (!File.Exists(good)) return;
+                    if (File.Exists(target) && new FileInfo(target).Length == new FileInfo(good).Length && Sha256(target) == Sha256(good)) return;
+                    if (VictoryRunning() || busyNow || setupBusy) return; // the next opening tries again
+                    Directory.CreateDirectory(Path.GetDirectoryName(target));
+                    var fresh = target + ".new";
+                    var old = target + ".bak";
+                    if (File.Exists(fresh)) File.Delete(fresh);
+                    File.Copy(good, fresh, true);
+                    if (new FileInfo(fresh).Length != new FileInfo(good).Length) { File.Delete(fresh); return; }
+                    bool had = File.Exists(target);
+                    if (had) { if (File.Exists(old)) File.Delete(old); File.Move(target, old); }
+                    try { File.Move(fresh, target); }
+                    catch (Exception)
+                    {
+                        if (had && !File.Exists(target)) File.Move(old, target);
+                        throw;
+                    }
+                    if (had) try { File.Delete(old); } catch (Exception) { }
+                    Log(string.Format(L("The emulator did not match this launcher (v{0}): the one its update brought is in place now.",
+                        "O emulador nao correspondia a este launcher (v{0}): o que a atualizacao trouxe esta agora no lugar.",
+                        "L'émulateur ne correspondait pas à ce lanceur (v{0}) : celui de sa mise à jour est maintenant en place."), Updater.Version));
+                    Post(Refresh2);
+                }
+                catch (Exception e)
+                {
+                    try { File.AppendAllText(Program.ErrorFile, DateTime.Now + "  repair engine: " + e + Environment.NewLine); } catch (Exception) { }
+                }
+            }) { IsBackground = true }.Start();
         }
 
         static string Sha256(string file)

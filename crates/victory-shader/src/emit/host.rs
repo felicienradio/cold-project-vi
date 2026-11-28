@@ -62,8 +62,115 @@ fn err(e: windows::core::Error) -> String {
     e.message().to_string()
 }
 
+/// The graphics card runs use: the first hardware adapter whose name holds
+/// `VICTORY_ADAPTER` (any case); else, of the cards with memory of their own
+/// (2 GB or more), the first in Windows' order that a monitor is plugged into;
+/// else the hardware adapter with the most memory of its own. Windows' first
+/// adapter is often an integrated GPU (a monitor on the board's outputs, a
+/// laptop), and a device made with no adapter named runs there. A PC with two
+/// cards plays on the one its monitor is on (v2026.11.27.8 took the one with
+/// the most memory: an RTX 5060 Ti 16 GB beside the RTX 5070 the monitor was
+/// on, every frame then sent across to the 5070). A laptop's card without
+/// outputs of its own is still taken over the integrated GPU. The warm-up,
+/// the game's device and DLSS take the same card, so the driver's saved
+/// pipelines are the card's that plays.
+/// None: no hardware adapter (the default device is made then).
+pub fn hardware_adapter() -> Option<(IDXGIAdapter1, String, u64)> {
+    // SAFETY: plain DXGI queries.
+    unsafe {
+        let factory: IDXGIFactory1 = CreateDXGIFactory1().ok()?;
+        let mut all = Vec::new();
+        for i in 0.. {
+            let Ok(adapter) = factory.EnumAdapters1(i) else { break };
+            let Ok(desc) = adapter.GetDesc1() else { continue };
+            if desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 != 0 {
+                continue;
+            }
+            let len = desc.Description.iter().position(|&c| c == 0).unwrap_or(desc.Description.len());
+            let monitor = adapter.EnumOutputs(0).is_ok();
+            all.push((adapter, String::from_utf16_lossy(&desc.Description[..len]), desc.DedicatedVideoMemory as u64, monitor));
+        }
+        pick_adapter(all, std::env::var("VICTORY_ADAPTER").ok().as_deref())
+    }
+}
+
+/// Own memory from which a card counts as one of its own, not an integrated GPU.
+const CARD_MEMORY: u64 = 2 << 30;
+
+/// The adapter `hardware_adapter` takes from (adapter, name, own memory,
+/// whether a monitor is plugged into it).
+fn pick_adapter<A>(all: Vec<(A, String, u64, bool)>, named: Option<&str>) -> Option<(A, String, u64)> {
+    let named = named.map(str::trim).filter(|n| !n.is_empty()).map(str::to_lowercase);
+    let mut shown: Option<(A, String, u64)> = None;
+    let mut best: Option<(A, String, u64)> = None;
+    for (adapter, name, own, monitor) in all {
+        if let Some(n) = &named
+            && name.to_lowercase().contains(n.as_str())
+        {
+            return Some((adapter, name, own));
+        }
+        if monitor && own >= CARD_MEMORY && shown.is_none() {
+            shown = Some((adapter, name, own));
+        } else if best.as_ref().is_none_or(|b| own > b.2) {
+            best = Some((adapter, name, own));
+        }
+    }
+    shown.or(best)
+}
+
+#[cfg(test)]
+mod adapter_tests {
+    use super::pick_adapter;
+
+    type Card = ((), String, u64, bool);
+
+    fn cards() -> Vec<Card> {
+        vec![
+            ((), "Intel(R) Graphics".to_owned(), 128 << 20, true),
+            ((), "NVIDIA GeForce RTX 4070 Ti".to_owned(), 12 << 30, false),
+            ((), "AMD Radeon(TM) Graphics".to_owned(), 512 << 20, false),
+        ]
+    }
+
+    fn name(all: Vec<Card>, named: Option<&str>) -> String {
+        pick_adapter(all, named).unwrap().1
+    }
+
+    #[test]
+    fn the_card_with_the_most_own_memory_unless_one_is_named() {
+        // A laptop: the monitor on the integrated GPU, the card without outputs.
+        assert_eq!(name(cards(), None), "NVIDIA GeForce RTX 4070 Ti");
+        assert_eq!(name(cards(), Some("  ")), "NVIDIA GeForce RTX 4070 Ti");
+        assert_eq!(name(cards(), Some("intel")), "Intel(R) Graphics");
+        // A name no card has: the rule as without one.
+        assert_eq!(name(cards(), Some("arc b580")), "NVIDIA GeForce RTX 4070 Ti");
+        assert!(pick_adapter(Vec::<Card>::new(), None).is_none());
+    }
+
+    #[test]
+    fn of_two_cards_the_one_the_monitor_is_on() {
+        let two = || {
+            vec![
+                ((), "NVIDIA GeForce RTX 5070".to_owned(), 12 << 30, true),
+                ((), "NVIDIA GeForce RTX 5060 Ti".to_owned(), 16 << 30, false),
+            ]
+        };
+        assert_eq!(name(two(), None), "NVIDIA GeForce RTX 5070");
+        assert_eq!(name(two(), Some("5060")), "NVIDIA GeForce RTX 5060 Ti");
+        // Monitors on both: Windows' first.
+        let mut both = two();
+        both[1].3 = true;
+        assert_eq!(name(both, None), "NVIDIA GeForce RTX 5070");
+        // No monitor on either (a remote session): the most memory.
+        let mut none = two();
+        none[0].3 = false;
+        assert_eq!(name(none, None), "NVIDIA GeForce RTX 5060 Ti");
+    }
+}
+
 impl Host {
-    /// The default adapter, or WARP with `warp` (or `VICTORY_WARP=1`).
+    /// The card `hardware_adapter` takes (else the default adapter), or WARP
+    /// with `warp` (or `VICTORY_WARP=1`).
     pub fn new(warp: bool) -> Result<Self, String> {
         let warp = warp || std::env::var("VICTORY_WARP").is_ok_and(|v| v == "1");
         // SAFETY: plain D3D12/DXGI calls with valid out pointers.
@@ -85,7 +192,12 @@ impl Host {
                 let adapter: IDXGIAdapter = factory.EnumWarpAdapter().map_err(err)?;
                 D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_12_0, &mut device).map_err(err)?;
             } else {
-                D3D12CreateDevice(None, D3D_FEATURE_LEVEL_12_0, &mut device).map_err(err)?;
+                if let Some((adapter, ..)) = hardware_adapter() {
+                    let _ = D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_12_0, &mut device);
+                }
+                if device.is_none() {
+                    D3D12CreateDevice(None, D3D_FEATURE_LEVEL_12_0, &mut device).map_err(err)?;
+                }
                 // A machine without a graphics card gives the software
                 // adapter as its default device (a hosted test runner,
                 // whose first adapter is a display stub that cannot make a
@@ -998,6 +1110,8 @@ pub enum View<'a> {
     Texture(u32, u32, &'a [[f32; 4]]),
     /// An RGBA32F cube SRV (face size, mip count, texels in D3D subresource order).
     Cube(u32, u16, &'a [[f32; 4]]),
+    /// An RGBA32F 3D texture SRV (width, height, depth, texels x fastest).
+    Texture3D(u32, u32, u32, &'a [[f32; 4]]),
     /// A raw buffer UAV of this many dwords, zeroed.
     RawUav(u32),
     /// An RGBA32F texture UAV (width, height), zeroed.
@@ -1180,6 +1294,48 @@ impl Host {
                 let mut at = views.GetCPUDescriptorHandleForHeapStart();
                 at.ptr += i * view_size;
                 match *v {
+                    View::Texture3D(w, h, depth, texels) => {
+                        let desc = D3D12_RESOURCE_DESC {
+                            Dimension: D3D12_RESOURCE_DIMENSION_TEXTURE3D,
+                            DepthOrArraySize: depth as u16,
+                            ..texture(w, h, D3D12_RESOURCE_FLAG_NONE)
+                        };
+                        let tex = make(
+                            D3D12_HEAP_TYPE_DEFAULT,
+                            &desc,
+                            D3D12_RESOURCE_STATE_COPY_DEST,
+                        )?;
+                        let pitch = (w as usize * 16).next_multiple_of(256);
+                        let upload = make(
+                            D3D12_HEAP_TYPE_UPLOAD,
+                            &buffer(
+                                (pitch * (h * depth) as usize) as u64,
+                                D3D12_RESOURCE_FLAG_NONE,
+                            ),
+                            D3D12_RESOURCE_STATE_GENERIC_READ,
+                        )?;
+                        let mut p = std::ptr::null_mut();
+                        upload.Map(0, None, Some(&mut p)).map_err(err)?;
+                        for (row, line) in texels.chunks(w as usize).enumerate() {
+                            std::ptr::copy_nonoverlapping(
+                                line.as_ptr().cast::<u8>(),
+                                p.cast::<u8>().add(row * pitch),
+                                line.len() * 16,
+                            );
+                        }
+                        upload.Unmap(0, None);
+                        let mut from = footprint(&upload, w, h);
+                        from.Anonymous.PlacedFootprint.Footprint.Depth = depth;
+                        list.CopyTextureRegion(&subresource(&tex), 0, 0, 0, &from, None);
+                        keep.push(upload);
+                        list.ResourceBarrier(&[transition(
+                            &tex,
+                            D3D12_RESOURCE_STATE_COPY_DEST,
+                            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                        )]);
+                        dev.CreateShaderResourceView(&tex, None, at);
+                        keep.push(tex);
+                    }
                     View::Texture(..) | View::Cube(..) => {
                         let (w, h, mut texels, faces, mips) = match *v {
                             View::Texture(w, h, t) => (w, h, t, 1, 1),

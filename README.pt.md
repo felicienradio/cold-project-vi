@@ -23,7 +23,7 @@
 > [!NOTE]
 > **Isto é um remake de [@edupode](https://github.com/edupode)** da ideia do Cold Project VI, com o nome interno
 > **"luz"**. Junta o [VIctory](https://github.com/Marvisak/VIctory), a build do cgbj (cputroll/cgbj-reupload), o
-> trabalho do Leonidas e do AnyXboxSeries, o fork VIctory-NVIDIA (trustno1-coder), as correções de renderização do fxceless e adaptações de um fork AMD
+> trabalho do Leonidas e do AnyXboxSeries, o fork VIctory-NVIDIA (trustno1-coder) e, através dele, o foxhound (readmet3xt-lab), o cool_fox (codec-d) e o VIctory do DexNom, as correções de renderização do fxceless e adaptações de um fork AMD
 > (avatarmanz/VIctory-7900XTX), afinados e alargados para um portátil NVIDIA. Não é o Cold Project VI original
 > (felicienradio/cold-project-vi), cuja página inspirou esta.
 
@@ -34,6 +34,39 @@
 GTA VI a partir do **teu próprio dump de Xbox Series**, no Windows, através do
 [VIctory](https://github.com/Marvisak/VIctory). Este ramo é a build do cgbj com a iluminação do VIctory-NVIDIA
 e muitas mudanças nossas. **Não inclui ficheiros do jogo.**
+
+### Novidades deste ramo (28/11/2026)
+
+- **O fork VIctory-NVIDIA juntado** ([trustno1-coder/VIctory-NVIDIA](https://github.com/trustno1-coder/VIctory-NVIDIA) e os seus
+  contribuidores; os commits deles mantêm os autores): DLSS Frame Generation e geração de frames AMD FSR 3 pelo NVIDIA Streamline,
+  o limite de 30 fps do próprio jogo levantado (a caixa 60 FPS), água aberta sem os blocos escuros, comandos PS4 e PS5, o runtime do Windows 10.
+- **Geração de frames na página Jogar:** Automático, NVIDIA Smooth Motion, DLSS Frame Generation (RTX 40/50; RTX 20/30 com o
+  [MFG Unlocker](https://github.com/dashdogy/MFG-Unlocker), um mod de terceiros com licença MIT, só descarregado se o escolheres),
+  FSR 3 (placas RTX, precisa do upscaling DLSS) ou VIctory 2X. Os ficheiros da NVIDIA e da AMD vêm do GitHub delas ao JOGAR.
+- **F1 no jogo:** menu de definições redesenhado (secções, o que faz cada opção); o que mudares aplica-se no JOGAR seguinte.
+  O DLSS e o multiplicador da geração de frames já se mudam no F1 mesmo com o jogo aberto pelo launcher (só o motor de
+  geração de frames e o limite de FPS ficam com o launcher). **F3:** o painel de estatísticas, em todos os builds.
+- **Placas de 8 GB (0.3.18):** sem texturas novas enquanto a placa passa o orçamento de memória; o excesso enchia a
+  memória do PC e crashava PCs de 8 GB / 16 GB de RAM ao fim de poucos minutos.
+- **Launcher (0.3.19):** os updates trocam todos os ficheiros de uma vez e revertem se algo falhar; o Preparar mostra
+  "Nao verificado" em vez de "Nao preciso" quando uma verificação falha; o log de cada jogo lista as definições usadas e quais o F1 mudou.
+- **Ficheiros do jogo em falta (0.3.20):** o launcher diz que DLL do jogo falta (ex.: amd_fidelityfx_loader_xbox.dll)
+  antes do JOGAR em vez de só "codigo 1", e um arranque assim já não passa as placas AMD para outro motor.
+- **Launcher (0.3.21):** definições automáticas para cada PC sempre que abre (preset, opções testadas, a geração
+  de frames testada nessa placa); opções não testadas marcadas EXPERIMENTAL; PCs dos jogadores mostra a mediana de FPS por placa.
+- **Launcher (0.3.22):** um aquecimento do primeiro arranque que crashou não volta a ser pedido (repetia-se em todos os
+  arranques), e as definições automáticas mantêm o preset de cada PC em vez de o escolherem outra vez a cada abertura.
+- **Motor (0.3.23):** a paragem do jogo em +0x1dac734 (um componente da preparação do FidelityFX que não arrancou)
+  passa a ser tratada como continuar sem ele: o jogo já não fecha ao fim de um segundo em alguns PCs; os outros nunca lá chegam.
+- **0.3.24:** um launcher fora de uma pasta de código usa sempre o victory.exe das atualizações; as paragens do jogo
+  depois de um componente não arrancar são saltadas em três sítios; logs e relatórios dizem que victory.exe arrancou.
+- **0.3.25:** o launcher repõe o victory.exe que a sua própria atualização trouxe quando está outro no lugar; os
+  relatórios listam a pasta do jogo (nomes e tamanhos) e o resumo de cada jogo tem uma linha sobre ela.
+- **Menos desperdício:** os buffers de upload de cada lista são reaproveitados em vez de um buffer novo por cópia (cerca de 700 por segundo antes).
+- **Launcher:** temas (Plum, Midnight, Vice, Graphite, Daylight) e uma página Jogar mais limpa; o primeiro arranque de um
+  `victory.exe` novo aquece e arranca de novo uma vez, sozinho.
+- Os FPS abaixo são de antes deste merge. Se o Windows Defender apagar um launcher acabado de compilar (deteção `!ml`),
+  Segurança do Windows, Histórico de proteção, **Permitir no dispositivo** recupera-o.
 
 ### O motor edupode
 

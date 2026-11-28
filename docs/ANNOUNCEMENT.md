@@ -1,14 +1,7 @@
-## Julia's Launcher {tag} is out ☀️
+## Julia's Launcher {tag} is out 🔧
 **Fixes**
-☀️ The sun is **white** again, no more black disc in the sky. The rest of the picture stays as it was.
-🧰 **Rust and the C++ Build Tools are no longer asked for** when nothing has to be built. Playing never needs them.
-🧭 When **Play** is greyed out, the button now tells you why, and Setup no longer stays stuck "busy" after a failed step.
-📟 The F3 panel no longer cuts its last line.
-
-**New**
-🎞️ Pick your **frame generation** on the Play page: Automatic, NVIDIA Smooth Motion (RTX 40/50), NVSmooth30 (RTX 30, experimental) or VIctory 2X (any card, experimental). The F3 panel shows which one runs.
-
-⏳ Shaders get prepared once more after this update (the translator changed for the sun).
+🔧 The launcher now makes sure the **emulator matches its version** when it opens, so engine fixes really reach every PC.
+📋 Error reports include a list of the game's folder (names and sizes only), to spot an incomplete game package quickly. Still crashing a second after opening? Press **Send errors** so we can compare.
 
 **Install**
 🔄 On 0.3.x: nothing to do, it installs itself within 5 minutes while the game is closed.

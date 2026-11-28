@@ -370,6 +370,9 @@ fn big(at: *mut u8, size: usize, made: bool) {
     if size < BIG {
         return;
     }
+    if made && size >= 64 << 20 {
+        name_big(size);
+    }
     for (place, bytes) in BIG_AT.iter().zip(&BIG_BYTES) {
         if made {
             if place.compare_exchange(0, at as usize, Relaxed, Relaxed).is_ok() {
@@ -382,6 +385,26 @@ fn big(at: *mut u8, size: usize, made: bool) {
             return;
         }
     }
+}
+
+thread_local! {
+    /// Set while [`name_big`] logs: what it allocates is not named again.
+    static NAMING_BIG: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Logs where a block of ours of 64 MB or more is made, for the first 24:
+/// the memory census lists their sizes alone (one of 401 MB in run leak3).
+fn name_big(size: usize) {
+    if NAMING_BIG.with(|n| n.replace(true)) {
+        return;
+    }
+    static NAMED: AtomicU64 = AtomicU64::new(0);
+    if NAMED.fetch_add(1, Relaxed) < 24 {
+        let trace = std::backtrace::Backtrace::force_capture();
+        tracing::info!(mb = size >> 20, "a block of ours of 64 MB or more made:
+{trace}");
+    }
+    NAMING_BIG.with(|n| n.set(false));
 }
 
 /// The sizes of our own big blocks alive, largest first, in MB.
@@ -839,7 +862,8 @@ fn log_memory() {
          outside buffers {:.0} MB; snapshot buffers kept: {} reserving {:.0} MB; staging of \
          textures: {} alive {:.0} MB, {} kept by their texture; host textures: {} alive {:.0} MB, \
          {} placed in title memory; made so far: {} upload buffers {:.0} MB, {} shared buffers \
-         {:.0} MB, {} card buffers {:.0} MB",
+         {:.0} MB, {} card buffers {:.0} MB; lists' upload buffers (VICTORY_UPLOAD_POOL): {} taken \
+         from those given back, {} made",
         mb(private),
         mb(working),
         mb(free),
@@ -862,6 +886,8 @@ fn log_memory() {
         mb(made[3]),
         made[4],
         mb(made[5]),
+        crate::host::UPLOAD_POOL_STATS[0].load(std::sync::atomic::Ordering::Relaxed),
+        crate::host::UPLOAD_POOL_STATS[1].load(std::sync::atomic::Ordering::Relaxed),
     );
     tracing::info!(
         "memory, placed textures: {} of them were asked for again with other filler words in their description          (one resource and host copy each since the filler left the key; VICTORY_PLACED_FILLER=1 keeps it)",
@@ -915,7 +941,7 @@ fn log_memory() {
         "memory, more: views named whole in their records since the start: {} constant buffer \
          views, {} views of placed memory; of the view table's entries {} are constant buffer \
          views and {} views of placed memory; shapes of placed views kept: {}; host lists: {} \
-         made by the host, {} preludes made for them, private bytes grew {:.0} MB while \
+         made by the host, {} preludes made for them ({} alive), private bytes grew {:.0} MB while \
          lists were made; twins of depth textures: {:.0} MB; host copies of \
          placed textures whose title memory is not mapped any more (estimate): {:.0} MB, of \
          them still shown by a descriptor slot {:.0} MB; the pipeline library's mapped file \
@@ -927,6 +953,7 @@ fn log_memory() {
         views[5],
         lists[0],
         lists[1],
+        crate::host::PRELUDES_ALIVE.load(Relaxed),
         lists[2] as i64 as f64 / (1 << 20) as f64,
         mb(census[7]),
         mb(census[8]),

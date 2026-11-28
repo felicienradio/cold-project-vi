@@ -127,6 +127,7 @@ namespace VIctoryLauncher
             sb.AppendLine("Windows: " + h.Os + "   Disk: " + h.Disk + (h.Laptop ? "   laptop" : ""));
             sb.AppendLine("Missing: " + (missing.Count == 0 ? "nothing" : string.Join(", ", missing.ToArray())));
             sb.AppendLine("Shaders cached: " + shaderFiles + (exeProblem != null ? "   Game file: " + exeProblem : ""));
+            sb.AppendLine(ExeLine());
             if (ticked.Count > 0) sb.AppendLine("Ticked: " + string.Join("; ", ticked.ToArray()));
             if (said.Length > 0) sb.AppendLine("In their words: " + said);
             summary = Scrub(sb.ToString());
@@ -144,24 +145,81 @@ namespace VIctoryLauncher
             }
             if (game)
             {
-                // The game folder's programs (names and sizes) and what `victory gpu` says.
-                var listing = new StringBuilder();
+                // The game folder as it is (names and sizes, paths relative to it) and what `victory gpu` says.
+                string listing = "";
                 try
                 {
                     string folder = null;
                     Invoke(new Action(() => folder = gameBox.Text.Trim()));
-                    if (Directory.Exists(folder))
-                        foreach (var p in Directory.GetFiles(folder).Where(p => p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || p.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
-                            listing.AppendLine(string.Format("{0,14:N0}  {1}", new FileInfo(p).Length, Path.GetFileName(p)));
+                    listing = GameFolderListing(folder, true);
                 }
                 catch (Exception) { }
-                File.WriteAllText(Path.Combine(dir, "game-folder.txt"), listing.ToString());
+                File.WriteAllText(Path.Combine(dir, "game-folder.txt"), listing);
                 if (OwnVictoryExe != null) File.WriteAllText(Path.Combine(dir, "victory-gpu.txt"), Scrub(RunCapture(OwnVictoryExe, "gpu")));
             }
             var zip = dir + ".zip";
             if (File.Exists(zip)) File.Delete(zip);
             ZipFile.CreateFromDirectory(dir, zip, CompressionLevel.Optimal, false);
             return zip;
+        }
+
+        // The game's folder for a report, paths relative to it (no user name): its size and file count; each
+        // folder at its top with its files and size; and, in full, every file at its top and every .rpf below.
+        // Two PCs whose games stopped where others start (a component of the game that did not start) are
+        // compared with one that plays from this (28/11/2026). Compact: one line, for every game's summary.
+        static string GameFolderListing(string folder, bool full)
+        {
+            if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return full ? "(no game folder)\r\n" : "Game folder: none";
+            long total = 0; int files = 0; bool cut = false;
+            var tops = new SortedDictionary<string, long[]>(StringComparer.OrdinalIgnoreCase);
+            var rpfs = new List<string>();
+            long rpfBytes = 0; int rpfCount = 0;
+            var root = folder.TrimEnd('\\') + "\\";
+            try
+            {
+                foreach (var p in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
+                {
+                    if (++files > 200000) { cut = true; break; }
+                    long len = 0;
+                    try { len = new FileInfo(p).Length; } catch (Exception) { }
+                    total += len;
+                    var rel = p.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? p.Substring(root.Length) : Path.GetFileName(p);
+                    var slash = rel.IndexOf('\\');
+                    var top = slash < 0 ? "" : rel.Substring(0, slash);
+                    long[] t;
+                    if (!tops.TryGetValue(top, out t)) tops[top] = t = new long[2];
+                    t[0]++; t[1] += len;
+                    if (rel.EndsWith(".rpf", StringComparison.OrdinalIgnoreCase))
+                    {
+                        rpfCount++; rpfBytes += len;
+                        if (full && rpfs.Count < 800) rpfs.Add(string.Format("{0,16:N0}  {1}", len, rel));
+                    }
+                }
+            }
+            catch (Exception) { cut = true; }
+            Func<long, string> gb = b => (b / 1073741824.0).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " GB";
+            if (!full)
+                return string.Format("Game folder: {0:N0} files, {1}{2}; .rpf: {3:N0} ({4}); folders: {5}", files, gb(total), cut ? " (cut)" : "", rpfCount, gb(rpfBytes),
+                    string.Join(", ", tops.Where(kv => kv.Key.Length > 0).Select(kv => kv.Key + " " + kv.Value[0] + "/" + gb(kv.Value[1])).ToArray()));
+            var sb = new StringBuilder();
+            sb.AppendLine(string.Format("{0:N0} files, {1}{2}; .rpf: {3:N0} files, {4}", files, gb(total), cut ? " (listing cut)" : "", rpfCount, gb(rpfBytes)));
+            sb.AppendLine();
+            sb.AppendLine("Files at the top:");
+            try
+            {
+                foreach (var p in Directory.GetFiles(folder).OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+                    sb.AppendLine(string.Format("{0,16:N0}  {1}", new FileInfo(p).Length, Path.GetFileName(p)));
+            }
+            catch (Exception) { }
+            sb.AppendLine();
+            sb.AppendLine("Folders at the top (files, size):");
+            foreach (var kv in tops.Where(kv => kv.Key.Length > 0))
+                sb.AppendLine(string.Format("{0,8:N0}  {1,10}  {2}", kv.Value[0], gb(kv.Value[1]), kv.Key));
+            sb.AppendLine();
+            sb.AppendLine(".rpf files:");
+            foreach (var l in rpfs) sb.AppendLine(l);
+            if (rpfCount > rpfs.Count) sb.AppendLine("  ... " + (rpfCount - rpfs.Count) + " more");
+            return sb.ToString();
         }
 
         public const string ReportEndpoint = "https://vi-hardware.edupodept.workers.dev/v1/report";

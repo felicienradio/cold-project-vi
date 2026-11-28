@@ -15,6 +15,12 @@ def table(rows, columns):
     return head + line + body
 
 
+def fps_line(f):
+    if not f or not f.get("fps_median"):
+        return "_Not enough measured games yet._\n"
+    return f"**{f['fps_pcs']} PCs measured**: {f['fps_median']} FPS median, {f['fps_low']} in the slowest 5 %.\n"
+
+
 def main(source, target):
     with open(source, encoding="utf-8") as f:
         s = json.load(f)
@@ -47,7 +53,13 @@ The hardware of the PCs whose players turned **Hardware sharing** on in Julia's 
 {table(s["gpu_vendors"], [("Maker", "name"), ("PCs", "pcs")])}
 ## Graphics cards
 
-{table(s["gpus"], [("Card", "name"), ("PCs", "pcs"), ("Video memory (GB)", "vram_gb"), ("Resizable BAR for the game (%)", "rebar_percent")])}
+{table(s["gpus"], [("Card", "name"), ("PCs", "pcs"), ("Video memory (GB)", "vram_gb"), ("FPS median", "fps_median"), ("FPS slowest 5 %", "fps_low"), ("PCs measured", "fps_pcs"), ("Resizable BAR for the game (%)", "rebar_percent")])}
+## FPS
+
+Measured by the players' own launchers (0.3.21 and later, with sharing on): each PC's last game of 3 minutes or more,
+the first 90 seconds left out; a median of the PCs' medians, for groups of 3 PCs or more.
+{fps_line(s.get("fps"))}
+{table(s.get("fps_presets", []), [("Preset", "name"), ("PCs measured", "fps_pcs"), ("FPS median", "fps_median"), ("FPS slowest 5 %", "fps_low")])}
 ## Processors
 
 {table(s["cpus"], [("Processor", "name"), ("PCs", "pcs"), ("Threads", "threads")])}

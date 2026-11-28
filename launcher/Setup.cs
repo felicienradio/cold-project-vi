@@ -360,7 +360,8 @@ namespace VIctoryLauncher
             public int NodeY;
             public Label Text, Detail;
             public Pill Button;
-            public int State = -2;       // -2: not checked yet
+            public int State = -2;       // -2: not checked yet; -1: not needed on this PC; -3: the check itself failed
+            public string CheckError;    // why the last check failed (State -3)
         }
 
         readonly List<Step> steps = new List<Step>();
@@ -471,12 +472,15 @@ namespace VIctoryLauncher
         void ShowSummary()
         {
             if (setupHead == null) return;
+            // A step whose check failed counts as known and not ready: "Everything is ready" never rests on it.
             int known = steps.Count(s => s.State != -1 && s.State != -2), ready = steps.Count(s => s.State == 1);
+            int notChecked = steps.Count(s => s.State == -3);
             setupHead.RightValue = known == 0
                 ? L("Checking your PC...", "A verificar o teu PC...", "Vérification de ton PC...")
                 : ready == known
                     ? L("Everything is ready.", "Esta tudo pronto.", "Tout est prêt.")
-                    : string.Format(L("{0} of {1} ready", "{0} de {1} prontos", "{0} sur {1} prêts"), ready, known);
+                    : string.Format(L("{0} of {1} ready", "{0} de {1} prontos", "{0} sur {1} prêts"), ready, known)
+                        + (notChecked > 0 ? string.Format(L(", {0} could not be checked", ", {0} por verificar", ", {0} non vérifiés"), notChecked) : "");
             setupHead.RightColor = known > 0 && ready == known ? Theme.Good : Theme.Cyan;
             // The line down the nodes fills as far as the steps are done in a row (a step this PC does not need passes).
             if (tline != null)
@@ -510,7 +514,9 @@ namespace VIctoryLauncher
                 Title = L("Build VIctory", "Compilar o VIctory"),
                 Why = L("Compiles the emulator from this folder (several minutes, once; again after an update).", "Compila o emulador a partir desta pasta (alguns minutos, uma vez; de novo depois de atualizar)."),
                 FixText = L("Build", "Compilar"),
-                Check = () => UseAmdEngine ? (OwnVictoryExe != null ? 1 : -1) : VictoryExe != null ? 1 : 0,
+                // (An engine older than its source counts as not built: a launcher that played it ran
+                // yesterday's code after a pull — see OutdatedEngine.)
+                Check = () => UseAmdEngine ? (OwnVictoryExe != null ? 1 : -1) : VictoryExe == null ? 0 : EngineOutdated ? 0 : 1,
                 Fix = BuildBlocking,
             });
             steps.Add(new Step {
@@ -612,12 +618,25 @@ namespace VIctoryLauncher
             new Thread(() => {
                 foreach (var st in steps)
                 {
-                    int s;
-                    try { s = st.Check(); } catch (Exception) { s = -1; }
                     var me = st;
+                    int s = CheckStep(st);
                     Post(() => PaintStep(me, s));
                 }
             }) { IsBackground = true }.Start();
+        }
+
+        // A step's check: its state, or -3 when the check itself threw (no access, WMI, a file that could not be read).
+        // That used to be -1 and showed as "Not needed", so a PC whose check failed looked ready (28/11/2026).
+        int CheckStep(Step st)
+        {
+            try { st.CheckError = null; return st.Check(); }
+            catch (Exception e)
+            {
+                bool first = st.CheckError == null;
+                st.CheckError = e.Message;
+                if (first) Log(st.Title + ": " + L("could not be checked", "nao foi possivel verificar", "vérification impossible") + " (" + e.Message + ")");
+                return -3;
+            }
         }
 
         void PaintStep(Step st, int state)
@@ -629,8 +648,10 @@ namespace VIctoryLauncher
         void PaintStep(Step st, int state, bool failed)
         {
             st.State = state;
-            int kind = state == 1 ? 1 : state == 0 ? (failed ? 5 : 0) : 3;
-            string word = kind == 1 ? L("Done", "Feito", "Fait") : kind == 5 ? L("Not done", "Nao feito", "Pas fait") : kind == 0 ? L("To do", "Por fazer", "À faire") : L("Not needed", "Nao preciso", "Inutile");
+            int kind = state == 1 ? 1 : state == 0 ? (failed ? 5 : 0) : state == -3 ? 5 : 3;
+            string word = kind == 1 ? L("Done", "Feito", "Fait")
+                : state == -3 ? L("Could not check", "Nao verificado", "Non vérifié")
+                : kind == 5 ? L("Not done", "Nao feito", "Pas fait") : kind == 0 ? L("To do", "Por fazer", "À faire") : L("Not needed", "Nao preciso", "Inutile");
             st.Badge.Set(kind, word);
             st.Chip.Set(kind, word);
             // The step still to do gets the accent button; a finished one a quiet outline.
@@ -671,15 +692,14 @@ namespace VIctoryLauncher
                 {
                     i++;
                     var me = st;
-                    int now;
-                    try { now = st.Check(); } catch (Exception) { now = -1; }
+                    int now = CheckStep(st);
                     if (now == 1 && which.Length > 1) { Post(() => PaintStep(me, 1)); continue; }
                     if (ClosingNow()) break; // the window is closing: no further step starts
                     Progress(string.Format("{0} ({1}/{2})...", st.Title, i, which.Length), (float)(i - 1) / which.Length);
                     Post(() => MarkRunning(me));
                     bool ok;
                     try { ok = st.Fix(); } catch (Exception e) { ok = false; Log(st.Title + ": " + e.Message); }
-                    try { now = st.Check(); } catch (Exception) { now = -1; }
+                    now = CheckStep(st);
                     bool tried = ok;
                     Post(() => PaintStep(me, now, !tried));
                     Log((now == 1 ? "✓ " : ok ? "• " : "✗ ") + st.Title);
@@ -746,12 +766,92 @@ namespace VIctoryLauncher
         }
 
         // A ready-made emulator is here (a release, or the installer): nothing has to be compiled.
+        // A ready-made emulator is here (a release, or the installer): nothing has to be compiled.
         // Rust and the C++ tools are asked for only while an engine still has to be compiled: the engine in use is
         // there already (a release's victory.exe, a build from source, or Belobug's AMD engine built once). Players
         // with both installed were asked again after an update (27/11/2026).
         bool NothingToBuild { get { return VictoryExe != null || (!UseAmdEngine && (File.Exists(Path.Combine(root, "victory.exe")) || File.Exists(Path.Combine(AppDir, "victory.exe")))); } }
 
-        // cargo.exe where rustup puts it: %CARGO_HOME%\bin when set, else %USERPROFILE%\.cargo\bin, or anywhere on PATH.
+        // ---------------------------------------------------------------- is the engine older than the source?
+        // A launcher that played whatever binary it found ran yesterday's engine after a pull, with every
+        // switch right and no FSR in it (2026-11-28: target\diag\victory.exe of the day before while the
+        // environment said VICTORY_FSR=1). The engine is rebuilt when the newest input of a build is newer
+        // than it: any .rs or .toml under the source, build.rs, and Cargo.toml / Cargo.lock /
+        // rust-toolchain.toml at its root. `target` and dot directories are not inputs. One walk per
+        // launch: memoised here, never per frame.
+        DateTime? newestInput;
+        string newestInputOf;
+
+        /// The newest input of a build in the source folder, cached for the launch.
+        DateTime NewestInput()
+        {
+            var src = SourceDir;
+            if (src == null) return DateTime.MinValue;
+            if (newestInput.HasValue && newestInputOf == src) return newestInput.Value;
+            var newest = NewestInputIn(src);
+            newestInput = newest;
+            newestInputOf = src;
+            return newest;
+        }
+
+        /// The newest .rs/.toml/build.rs under `folder`, `target` and dot directories left out.
+        public static DateTime NewestInputIn(string folder)
+        {
+            var newest = DateTime.MinValue;
+            try { Walk(new DirectoryInfo(folder), 0, ref newest); } catch (Exception) { }
+            return newest;
+        }
+
+        static void Walk(DirectoryInfo dir, int depth, ref DateTime newest)
+        {
+            if (depth > 12) return;
+            try
+            {
+                foreach (var f in dir.EnumerateFiles())
+                {
+                    var name = f.Name;
+                    bool input = name.EndsWith(".rs", StringComparison.OrdinalIgnoreCase)
+                              || name.EndsWith(".toml", StringComparison.OrdinalIgnoreCase)
+                              || name.Equals("build.rs", StringComparison.OrdinalIgnoreCase);
+                    if (input && f.LastWriteTimeUtc > newest) newest = f.LastWriteTimeUtc;
+                }
+                foreach (var d in dir.EnumerateDirectories())
+                {
+                    var name = d.Name;
+                    if (name.StartsWith(".") || name.Equals("target", StringComparison.OrdinalIgnoreCase)) continue;
+                    Walk(d, depth + 1, ref newest);
+                }
+            }
+            catch (Exception) { }   // a folder that cannot be listed is no input we know of
+        }
+
+        /// The engine file the launcher would start, when it is older than the source it was built from.
+        public string OutdatedEngine
+        {
+            get
+            {
+                var exe = VictoryExe;
+                if (exe == null || UseAmdEngine || !File.Exists(exe)) return null;
+                try { return NewestInput() > File.GetLastWriteTimeUtc(exe) ? exe : null; }
+                catch (Exception) { return null; }
+            }
+        }
+
+        public bool EngineOutdated { get { return OutdatedEngine != null; } }
+
+        /// What the Setup step and PLAY say when the engine is older than its source: both times, in the
+        /// person's language.
+        public string OutdatedEngineLine()
+        {
+            var exe = OutdatedEngine;
+            if (exe == null) return null;
+            return string.Format(L("the source is newer than {0} (source {1:yyyy-MM-dd HH:mm}, engine {2:yyyy-MM-dd HH:mm} UTC)",
+                                   "o codigo e mais recente que {0} (codigo {1:yyyy-MM-dd HH:mm}, motor {2:yyyy-MM-dd HH:mm} UTC)",
+                                   "le code est plus recent que {0} (code {1:yyyy-MM-dd HH:mm}, moteur {2:yyyy-MM-dd HH:mm} UTC)"),
+                                 Path.GetFileName(exe), NewestInput(), File.GetLastWriteTimeUtc(exe));
+        }
+
+        // cargo.exe where rustup puts it: the CARGO_HOME folder when set, else the user profile's .cargo folder, or anywhere on PATH.
         static string FoundCargo()
         {
             var home = Environment.GetEnvironmentVariable("CARGO_HOME");
@@ -849,7 +949,7 @@ namespace VIctoryLauncher
             var log = Path.Combine(dataRoot, "logs", logName);
             Directory.CreateDirectory(Path.GetDirectoryName(log));
             int crates = 0;
-            var psi = new ProcessStartInfo(CargoExe, "build --locked --profile diag -p victory --features diagnostics") { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true, WorkingDirectory = folder };
+            var psi = new ProcessStartInfo(CargoExe, "build --locked --profile diag -p victory --bin victory --features diagnostics") { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true, WorkingDirectory = folder };
             var cargoBin = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cargo", "bin");
             psi.EnvironmentVariables["PATH"] = cargoBin + ";" + Environment.GetEnvironmentVariable("PATH");
             // A storage folder on another drive (Storage.cs): the build goes there, not into the source folder.

@@ -288,10 +288,54 @@ namespace VIctoryLauncher
                 // Big enough, but the game's own files are not beside the executable (it sits in Downloads among
                 // other files): the shaders do not prepare and the game cannot start.
                 if (MissingDumpFiles(Path.GetDirectoryName(path)).Length > 0) return MissingDumpText(Path.GetDirectoryName(path));
+                // The game's own DLLs: without one it ends at once with code 1, whatever the engine.
+                var absent = MissingTitleDlls(Path.GetDirectoryName(path));
+                if (absent.Length > 0)
+                    return string.Format(L("The game's folder is missing its own files: {0}. Copy them from the complete game package next to {1}.",
+                        "Faltam ficheiros do proprio jogo na pasta: {0}. Copia-os do pacote completo do jogo para junto do {1}.",
+                        "Il manque des fichiers du jeu lui-même dans son dossier : {0}. Copie-les depuis le paquet complet du jeu à côté de {1}."),
+                        string.Join(", ", absent), Path.GetFileName(path));
                 // Empty program libraries beside it end the game the same way.
                 var empty = Directory.GetFiles(Path.GetDirectoryName(path), "*.dll").Where(d => new FileInfo(d).Length < 64).Select(Path.GetFileName).Take(3).ToArray();
                 if (empty.Length > 0)
                     return string.Format(L("The dump has empty files ({0}): download or extract it again.", "O dump tem ficheiros vazios ({0}): volta a descarregar ou extrair."), string.Join(", ", empty));
+            }
+            catch (Exception) { }
+            return null;
+        }
+
+        // The DLLs of its own that the game (1.0.2.1) imports and VIctory does not provide: without one it cannot
+        // start ("missing dlls" in its log, code 1). The upscaler and the C++ runtime beside them are not needed.
+        static readonly string[] TitleDlls = { "amd_fidelityfx_loader_xbox.dll", "bink2scarlett.dll", "libhttpclient.gdk.dll", "xboxbvhbuilder.dll" };
+
+        static string[] MissingTitleDlls(string dir)
+        {
+            try { return TitleDlls.Where(d => !File.Exists(Path.Combine(dir, d))).ToArray(); }
+            catch (Exception) { return new string[0]; }
+        }
+
+        // The DLLs VIctory said were missing when the game started ("missing dlls   a.dll, b.dll not in <dir>, ..."),
+        // from the end of a session's log; null if it said nothing of them.
+        static string[] MissingDllsInLog(string log)
+        {
+            try
+            {
+                if (log == null || !File.Exists(log)) return null;
+                string text;
+                using (var f = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    f.Seek(Math.Max(0, f.Length - (256 << 10)), SeekOrigin.Begin);
+                    using (var r = new StreamReader(f)) text = r.ReadToEnd();
+                }
+                foreach (var raw in text.Split('\n'))
+                {
+                    var line = raw.Trim();
+                    if (!line.StartsWith("missing dlls")) continue;
+                    var rest = line.Substring("missing dlls".Length).Trim();
+                    var at = rest.IndexOf(" not in ", StringComparison.Ordinal);
+                    if (at <= 0) continue;
+                    return rest.Substring(0, at).Split(',').Select(d => d.Trim()).Where(d => d.Length > 0).ToArray();
+                }
             }
             catch (Exception) { }
             return null;

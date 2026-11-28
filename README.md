@@ -35,7 +35,7 @@
 > **This is a remake by [@edupode](https://github.com/edupode)** of the Cold Project VI idea, internally
 > called **"luz"** (Portuguese for *light*, after the lighting work it started with). It combines
 > [VIctory](https://github.com/Marvisak/VIctory), the cgbj build (cputroll/cgbj-reupload), Leonidas's and
-> AnyXboxSeries's work, the VIctory-NVIDIA fork (trustno1-coder), fxceless's rendering fixes and adaptations from an AMD fork
+> AnyXboxSeries's work, the VIctory-NVIDIA fork (trustno1-coder) and through it foxhound (readmet3xt-lab), cool_fox (codec-d) and DexNom's VIctory, fxceless's rendering fixes and adaptations from an AMD fork
 > (avatarmanz/VIctory-7900XTX), tuned and extended for an NVIDIA laptop. It is not the upstream Cold Project
 > VI (felicienradio/cold-project-vi), whose page inspired this one.
 
@@ -59,6 +59,39 @@
 GTA VI from **your own Xbox Series dump**, on Windows, through [VIctory](https://github.com/Marvisak/VIctory)
 (this branch: the cgbj build with the VIctory-NVIDIA lighting and many changes of our own). **No game files are
 included.**
+
+### What's new on this branch (28/11/2026)
+
+- **The VIctory-NVIDIA fork merged in** ([trustno1-coder/VIctory-NVIDIA](https://github.com/trustno1-coder/VIctory-NVIDIA) and its
+  contributors; their commits keep their authors): DLSS Frame Generation and AMD FSR 3 frame generation through NVIDIA
+  Streamline, the game's own 30 fps limit lifted (the 60 FPS box), open water without the dark blocks, PS4 and PS5 pads, the Windows 10 runtime.
+- **Frame generation on the Play page:** Automatic, NVIDIA Smooth Motion, DLSS Frame Generation (RTX 40/50; RTX 20/30 with
+  [MFG Unlocker](https://github.com/dashdogy/MFG-Unlocker), someone else's MIT-licensed mod, fetched only if you pick it),
+  FSR 3 (RTX cards, it needs DLSS upscaling) or VIctory 2X. NVIDIA's and AMD's files are fetched from their own GitHub at PLAY.
+- **F1 in the game:** a redesigned settings menu (sections, what each setting does); what you change there applies at the next
+  PLAY. DLSS and the frame generation multiplier can now be changed in F1 even when the launcher started the game (only
+  the frame generation engine and the frame cap stay the launcher's). **F3:** the stats panel, in every build.
+- **8 GB cards (0.3.18):** no new textures while the card is past its memory budget; the overflow filled the PC's memory
+  and crashed 8 GB / 16 GB RAM PCs a few minutes in.
+- **Launcher (0.3.19):** updates swap all files as one piece and roll back if anything fails; Setup shows "Could not
+  check" instead of "Not needed" when a check fails; each game's log lists the settings it really used and which F1 changed.
+- **Missing game files (0.3.20):** the launcher names a missing DLL of the game (e.g. amd_fidelityfx_loader_xbox.dll)
+  before PLAY instead of a bare "code 1", and such a start no longer moves AMD cards to another engine.
+- **Launcher (0.3.21):** automatic settings for each PC every time it opens (preset, tested options, the frame
+  generation tested on that card); untested options marked EXPERIMENTAL; Players' PCs shows the median FPS per card.
+- **Launcher (0.3.22):** a first-start warm-up that crashed is not asked for again (it looped on every start), and
+  automatic settings keep each PC's preset instead of picking it again at every opening.
+- **Engine (0.3.23):** the title's stop at +0x1dac734 (a component under its FidelityFX setup that did not start)
+  is taken as going on without it: the game no longer closes a second in on some PCs; others never reach it.
+- **0.3.24:** a launcher outside a source folder always plays the victory.exe its updates install; the title's
+  component-start stops are stepped over at three places; logs and reports name the victory.exe that started.
+- **0.3.25:** the launcher puts back the victory.exe its own update brought when another one is in place; reports
+  list the game's folder (names and sizes) and each game's summary has a line about it.
+- **Less churn:** a list's upload buffers are reused instead of one new buffer per copy (about 700 a second before).
+- **Launcher:** themes (Plum, Midnight, Vice, Graphite, Daylight) and a cleaner Play page; the first start of a new
+  `victory.exe` warms up and starts again once, by itself.
+- The FPS figures below are from before this merge. If Windows Defender removes a freshly built launcher (a `!ml` detection),
+  Windows Security, Protection history, **Allow on device** brings it back.
 
 ### The edupode engine
 
@@ -293,6 +326,7 @@ video memory reserve help), and the `_Tiled` volumetrics shader, still being fix
   flickers on characters, no ray tracing.
 
 More: [docs/GUIDE-30FPS.md](docs/GUIDE-30FPS.md) (English guide and what each setting does),
+[docs/FSR.md](docs/FSR.md) (AMD's own upscaler and frame generation, and the files you fetch from AMD),
 [docs/LUZ-24FPS.md](docs/LUZ-24FPS.md) (Portuguese notes), [docs/replay.md](docs/replay.md) (frame recorder).
 Earlier upstream notes: [docs/archive/README-upstream.md](docs/archive/README-upstream.md).
 

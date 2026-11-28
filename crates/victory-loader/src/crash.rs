@@ -480,6 +480,27 @@ unsafe extern "system" fn handler(info: *mut EXCEPTION_POINTERS) -> i32 {
     if unsafe { emulate_amd_only(info) } {
         return -1; // EXCEPTION_CONTINUE_EXECUTION
     }
+    // The title's asserts after a component that did not start (`crate::hooks::FEATURE_ASSERTS_AT`):
+    // the run goes on without it, past the `int3`, instead of ending a second in. Matched on the
+    // exception's address (the `int3` itself; the context's instruction pointer is the same there,
+    // measured on Windows 11), and the thread resumes on the byte after it.
+    // SAFETY: as above.
+    if unsafe { (*(*info).ExceptionRecord).ExceptionCode } == EXCEPTION_BREAKPOINT {
+        // SAFETY: as above.
+        let address = unsafe { (*(*info).ExceptionRecord).ExceptionAddress } as usize;
+        if let Some(rva) = crate::hooks::feature_assert_at(address) {
+            // SAFETY: as above; the faulting thread's context.
+            let context = unsafe { &mut *(*info).ContextRecord };
+            context.Rip = (address + 1) as u64;
+            static TOLD: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            if TOLD.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 3 {
+                tracing::warn!(
+                    "the title stopped at +{rva:#x} (one of its components did not start): going on without it"
+                );
+            }
+            return -1; // EXCEPTION_CONTINUE_EXECUTION
+        }
+    }
     // SAFETY: as above.
     if FATAL.contains(&unsafe { (*(*info).ExceptionRecord).ExceptionCode }) {
         // SAFETY: as above.
@@ -774,6 +795,41 @@ mod tests {
     use windows_sys::Win32::System::Diagnostics::Debug::{
         EXCEPTION_RECORD, RtlCaptureContext, RtlCaptureStackBackTrace,
     };
+
+    /// A real `int3` at an armed address is stepped over by the vectored
+    /// handler, and the code after it runs (the title's component asserts,
+    /// `crate::hooks::FEATURE_ASSERTS_AT`); the address is disarmed after.
+    #[test]
+    fn an_armed_int3_is_stepped_over() {
+        AddVectoredExceptionHandlerOnce();
+        let slot = &crate::hooks::FEATURE_ASSERTS_AT[2];
+        let after: u64;
+        // SAFETY: the int3's address is stored in the slot before it runs; the
+        // handler resumes on the next instruction, which sets `after`.
+        unsafe {
+            std::arch::asm!(
+                "lea {a}, [rip + 2f]",
+                "mov qword ptr [{slot}], {a}",
+                "2:",
+                "int3",
+                "mov {after}, 7",
+                a = out(reg) _,
+                slot = in(reg) slot.as_ptr(),
+                after = out(reg) after,
+            );
+        }
+        slot.store(0, std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(after, 7);
+    }
+
+    #[allow(non_snake_case)]
+    fn AddVectoredExceptionHandlerOnce() {
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        // SAFETY: the same handler the runtime installs.
+        ONCE.call_once(|| unsafe {
+            AddVectoredExceptionHandler(1, Some(handler));
+        });
+    }
 
     /// What [`capture_frames`] saw: our [`unwind`], then the system's walk.
     type Captured = (Vec<u64>, Vec<usize>);

@@ -24,7 +24,7 @@
 > **Ceci est un remake par [@edupode](https://github.com/edupode)** de l'idée de Cold Project VI, appelé en interne
 > **« luz »** (*lumière* en portugais, d'après le travail sur l'éclairage par lequel il a commencé). Il réunit
 > [VIctory](https://github.com/Marvisak/VIctory), la build cgbj (cputroll/cgbj-reupload), le travail de Leonidas et
-> d'AnyXboxSeries, le fork VIctory-NVIDIA (trustno1-coder), les corrections de rendu de fxceless et des adaptations
+> d'AnyXboxSeries, le fork VIctory-NVIDIA (trustno1-coder) et, à travers lui, foxhound (readmet3xt-lab), cool_fox (codec-d) et le VIctory de DexNom, les corrections de rendu de fxceless et des adaptations
 > d'un fork AMD (avatarmanz/VIctory-7900XTX), réglés et étendus pour un portable NVIDIA. Ce n'est pas le Cold Project
 > VI d'origine (felicienradio/cold-project-vi), dont la page a inspiré celle-ci.
 
@@ -35,6 +35,39 @@
 GTA VI à partir de **votre propre dump Xbox Series**, sous Windows, grâce à [VIctory](https://github.com/Marvisak/VIctory)
 (cette branche : la build cgbj avec l'éclairage de VIctory-NVIDIA et beaucoup de changements à nous). **Aucun fichier
 du jeu n'est inclus.**
+
+### Nouveautés de cette branche (28/11/2026)
+
+- **Le fork VIctory-NVIDIA fusionné** ([trustno1-coder/VIctory-NVIDIA](https://github.com/trustno1-coder/VIctory-NVIDIA) et ses
+  contributeurs ; leurs commits gardent leurs auteurs) : DLSS Frame Generation et génération d'images AMD FSR 3 via NVIDIA
+  Streamline, la limite de 30 fps du jeu levée (la case 60 FPS), l'eau sans les blocs sombres, manettes PS4 et PS5, le runtime de Windows 10.
+- **Génération d'images sur la page Jouer :** Automatique, NVIDIA Smooth Motion, DLSS Frame Generation (RTX 40/50 ; RTX 20/30 avec
+  [MFG Unlocker](https://github.com/dashdogy/MFG-Unlocker), un mod tiers sous licence MIT, téléchargé seulement si tu le choisis),
+  FSR 3 (cartes RTX, il lui faut l'upscaling DLSS) ou VIctory 2X. Les fichiers de NVIDIA et d'AMD viennent de leur GitHub à JOUER.
+- **F1 en jeu :** menu de réglages redessiné (sections, ce que fait chaque réglage) ; tes changements s'appliquent au JOUER suivant.
+  Le DLSS et le multiplicateur de génération d'images se changent maintenant dans F1 même quand le launcher a lancé le jeu
+  (seuls le moteur de génération d'images et la limite d'images restent au launcher). **F3 :** le panneau de statistiques, dans tous les builds.
+- **Cartes de 8 Go (0.3.18) :** plus de nouvelles textures quand la carte dépasse son budget de mémoire ; le surplus
+  remplissait la mémoire du PC et faisait planter les PC à 8 Go / 16 Go de RAM au bout de quelques minutes.
+- **Lanceur (0.3.19) :** les mises à jour remplacent tous les fichiers d'un coup et reviennent en arrière en cas d'échec ;
+  l'installation affiche « Non vérifié » au lieu de « Inutile » quand une vérification échoue ; le journal de chaque partie liste les réglages utilisés et ceux changés par F1.
+- **Fichiers du jeu manquants (0.3.20) :** le lanceur nomme la DLL du jeu manquante (ex. amd_fidelityfx_loader_xbox.dll)
+  avant JOUER au lieu d'un simple « code 1 », et un tel lancement ne fait plus passer les cartes AMD sur un autre moteur.
+- **Lanceur (0.3.21) :** réglages automatiques pour chaque PC à chaque ouverture (préréglage, options testées, la
+  génération d'images testée sur cette carte) ; options non testées marquées EXPÉRIMENTAL ; PC des joueurs affiche les FPS médians par carte.
+- **Lanceur (0.3.22) :** un réchauffage du premier lancement qui a planté n'est plus redemandé (il se répétait à chaque
+  lancement), et les réglages automatiques gardent le préréglage de chaque PC au lieu de le rechoisir à chaque ouverture.
+- **Moteur (0.3.23) :** l'arrêt du jeu en +0x1dac734 (un composant de la préparation FidelityFX qui n'a pas démarré)
+  est traité comme continuer sans lui : le jeu ne se ferme plus au bout d'une seconde sur certains PC ; les autres n'y arrivent jamais.
+- **0.3.24 :** un lanceur hors d'un dossier source utilise toujours le victory.exe des mises à jour ; les arrêts du jeu
+  après un composant qui n'a pas démarré sont passés en trois endroits ; journaux et rapports nomment le victory.exe lancé.
+- **0.3.25 :** le lanceur remet le victory.exe apporté par sa propre mise à jour quand un autre est en place ; les
+  rapports listent le dossier du jeu (noms et tailles) et le résumé de chaque partie a une ligne à son sujet.
+- **Moins de gaspillage :** les buffers d'envoi d'une liste sont réutilisés au lieu d'un nouveau buffer par copie (environ 700 par seconde avant).
+- **Lanceur :** thèmes (Plum, Midnight, Vice, Graphite, Daylight) et une page Jouer plus nette ; le premier démarrage d'un
+  nouveau `victory.exe` chauffe puis redémarre une fois, tout seul.
+- Les FPS ci-dessous datent d'avant cette fusion. Si Windows Defender supprime un lanceur fraîchement compilé (détection `!ml`),
+  Sécurité Windows, Historique de protection, **Autoriser sur l'appareil** le rend.
 
 ### Le moteur edupode
 

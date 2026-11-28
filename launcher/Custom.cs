@@ -187,7 +187,7 @@ namespace VIctoryLauncher
             // The actions: play with these, back, and the presets to start from.
             var useText = L("Play with these (Custom)", "Jogar com estes (Personalizado)", "Jouer avec ceux-ci (Personnalisé)");
             var use = new Pill { Main = true, Text = useText, Size = new Size(Kit.PillW(useText, 9.5f, 230), 40) };
-            use.Click += (s, e) => { SelectMode(ModeCustom); SaveSettings(); Show(PagePlay); };
+            use.Click += (s, e) => { ManualChoice(); SelectMode(ModeCustom); SaveSettings(); Show(PagePlay); };
             var back = new Pill { Text = L("Back to Play", "Voltar a Jogar", "Retour à Jouer"), Size = new Size(150, 40) };
             back.Click += (s, e) => Show(PagePlay);
             Func<int, string> name = k => modes[k].Name;

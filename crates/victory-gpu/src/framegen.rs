@@ -1,4 +1,4 @@
-//! Frame generation that needs nothing of the card's maker (`VICTORY_FRAMEGEN=1`): for cards
+//! Frame generation that needs nothing of the card's maker (`VICTORY_VI_FRAMEGEN=1`): for cards
 //! without NVIDIA Smooth Motion (GTX 10, RTX 20/30, AMD, Intel). Between two frames the title
 //! presents, a third is made from the two and shown halfway between them.
 //!
@@ -27,13 +27,13 @@ use windows::core::{PCSTR, s};
 
 use crate::host::{Host, HostList, transition};
 
-/// `VICTORY_FRAMEGEN=1`.
+/// `VICTORY_VI_FRAMEGEN=1`.
 pub(crate) fn on() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| {
-        let on = std::env::var_os("VICTORY_FRAMEGEN").is_some_and(|v| v == "1");
+        let on = std::env::var_os("VICTORY_VI_FRAMEGEN").is_some_and(|v| v == "1");
         if on {
-            tracing::info!("frame generation on (VICTORY_FRAMEGEN): a frame made between each two of the title's");
+            tracing::info!("frame generation on (VICTORY_VI_FRAMEGEN): a frame made between each two of the title's");
         }
         on
     })

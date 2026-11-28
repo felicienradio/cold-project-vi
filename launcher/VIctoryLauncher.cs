@@ -32,6 +32,30 @@ namespace VIctoryLauncher
                 try { File.AppendAllText(ErrorFile, DateTime.Now + "  " + e.Exception + Environment.NewLine); } catch (Exception) { }
                 MessageBox.Show("Julia's Launcher: " + e.Exception.Message + "\r\n\r\n(Help > Send errors to Discord)", "Julia's Launcher", MessageBoxButtons.OK, MessageBoxIcon.Error);
             };
+            // `--stale-check <source folder> <engine exe> <result file>`: for scripts\test-launcher-stale.ps1,
+            // which proves the freshness rule without the game (a windowless program has no console to print
+            // to). The same walk the Setup step and PLAY use.
+            int stale = Array.IndexOf(args, "--stale-check");
+            if (stale >= 0 && stale + 2 < args.Length)
+            {
+                var src = args[stale + 1];
+                var engineExe = args[stale + 2];
+                var result = stale + 3 < args.Length ? args[stale + 3] : null;
+                // The verdict is the exit code (0 fresh, 1 stale, 2 error): a windowless program has no
+                // console, and a file in a temporary folder proved unreliable under the test's own profile.
+                // The times go beside it when a file was named.
+                try
+                {
+                    var newest = LauncherForm.NewestInputIn(src);
+                    var engine = File.Exists(engineExe) ? File.GetLastWriteTimeUtc(engineExe) : DateTime.MinValue;
+                    var newer = newest > engine;
+                    if (!string.IsNullOrEmpty(result))
+                        try { File.WriteAllText(result, (newer ? "stale " : "fresh ") + newest.ToString("o") + " " + engine.ToString("o")); }
+                        catch (Exception) { }
+                    return newer ? 1 : 0;
+                }
+                catch (Exception) { return 2; }
+            }
             // The installer's one administrator step (installer\VI.iss): Windows settings, then out.
             if (args.Contains("--admin-setup")) return AdminTasks.Run(args);
             // The Setup page's virtual memory step, run as administrator (no PowerShell).
@@ -56,12 +80,28 @@ namespace VIctoryLauncher
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+                // The theme (launcher.ini's theme=) before any window or brush is made.
+                Theme.Use(SavedTheme());
                 Application.Run(new LauncherForm());
             }
             return 0;
         }
 
         [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
+
+        // launcher.ini's theme= (%LOCALAPPDATA%\VIctory\launcher.ini), read before the form exists.
+        static string SavedTheme()
+        {
+            try
+            {
+                var ini = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VIctory", "launcher.ini");
+                if (File.Exists(ini))
+                    foreach (var line in File.ReadAllLines(ini))
+                        if (line.StartsWith("theme=")) return line.Substring(6).Trim();
+            }
+            catch (Exception) { }
+            return "plum";
+        }
     }
 
     // A preset: render scale and the switches it turns on.
@@ -256,6 +296,8 @@ namespace VIctoryLauncher
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            // The first focus on PLAY: a list lower on the page would take it, and the page would open scrolled down to it.
+            if (playButton != null && playButton.CanFocus) ActiveControl = playButton;
             // PLAY follows the game and the tasks on its own (a game closed, a build done).
             var timer = new System.Windows.Forms.Timer { Interval = 2000 };
             timer.Tick += (s, a) => { if (!setupBusy) Refresh2(); };
@@ -278,13 +320,14 @@ namespace VIctoryLauncher
             later.Start();
             StartUpdates();
             StartHardwareShare();
+            RepairEngine();
         }
 
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            // The PayDrop theme is dark: a dark title bar, tinted plum where Windows 11 allows it.
-            int on = 1;
+            // The title bar follows the theme: dark (or light), tinted with its side colour where Windows 11 allows it.
+            int on = Theme.Dark ? 1 : 0;
             try { if (DwmSetWindowAttribute(Handle, 20, ref on, 4) != 0) DwmSetWindowAttribute(Handle, 19, ref on, 4); } catch (Exception) { }
             int caption = Theme.Side.R | (Theme.Side.G << 8) | (Theme.Side.B << 16);
             try { DwmSetWindowAttribute(Handle, 35, ref caption, 4); } catch (Exception) { }
@@ -379,8 +422,29 @@ namespace VIctoryLauncher
             side.Controls.Add(en); side.Controls.Add(pt); side.Controls.Add(fr);
             var tech = new Label { Text = "D3D12 · SM 6.6", Font = Theme.Mono(8f), ForeColor = Theme.Dim, AutoSize = true, BackColor = Theme.Side, Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
             side.Controls.Add(tech);
+            // The theme picker: one circle per theme; a click saves it (launcher.ini theme=) and opens the launcher again in it.
+            int lang = Fr ? 2 : Pt ? 1 : 0;
+            var themeLabel = new Label { Text = L("Theme", "Tema", "Thème") + " · " + Theme.Label(Theme.Current, lang), Font = Theme.Ui(8.5f), ForeColor = Theme.Muted, AutoSize = true, BackColor = Theme.Side, Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+            side.Controls.Add(themeLabel);
+            var dots = new List<ThemeDot>();
+            var dotTips = new ToolTip();
+            foreach (var name in Theme.Names)
+            {
+                var n = name;
+                var d = new ThemeDot { ThemeName = n, BackColor = Theme.Side, Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+                dotTips.SetToolTip(d, Theme.Label(n, lang));
+                d.MouseEnter += (s, e) => themeLabel.Text = L("Theme", "Tema", "Thème") + " · " + Theme.Label(n, lang);
+                d.MouseLeave += (s, e) => themeLabel.Text = L("Theme", "Tema", "Thème") + " · " + Theme.Label(Theme.Current, lang);
+                d.Click += (s, e) => { if (n == Theme.Current) return; WriteSetting("theme", n); SaveSettings(); RestartLauncher(); };
+                dots.Add(d);
+                side.Controls.Add(d);
+            }
             side.Resize += (s, e) => {
-                report.Top = side.Height - 124;
+                themeLabel.Location = new Point(18, side.Height - 152);
+                for (int i = 0; i < dots.Count; i++) dots[i].Location = new Point(14 + i * 37, side.Height - 128);
+            };
+            side.Resize += (s, e) => {
+                report.Top = side.Height - 200;
                 en.Location = new Point(16, side.Height - 80); pt.Location = new Point(79, side.Height - 80); fr.Location = new Point(142, side.Height - 80);
                 tech.Location = new Point((side.Width - tech.Width) / 2, side.Height - 36);
             };
@@ -603,13 +667,16 @@ namespace VIctoryLauncher
             var page = Page();
             const int X = 40, W = 900;
             Theme.TestedText = L("Tested", "Testado", "Testé");
+            Theme.ExperimentalText = L("Experimental", "Experimental", "Expérimental");
 
             // The poster: Julia's Launcher and the build along the top rule, the headline, one sentence, PLAY and
             // Setup, the readiness steps as milestone chips on the rings, the hardware along the bottom rule
             // (Refresh2 and UpdateBanner fill them in). The strip of checks stays as the steps' data, not drawn.
             statusStrip = new StatusStrip();
             banner = new Hero { Location = new Point(0, 0), Size = new Size(2 * X + W, Hero.Rows),
-                Brand = "Julia's Launcher", BrandValue = "v" + Updater.Version,
+                // (The name and the version are in the top bar already: the poster names the page.)
+                Brand = L("Play", "Jogar", "Jouer"), BrandValue = L("Everything the game needs, checked", "Tudo o que o jogo precisa, verificado", "Tout ce qu'il faut au jeu, vérifié"),
+                StepsTitle = L("Ready to play", "Pronto para jogar", "Prêt à jouer"),
                 RightLabel = L("Build", "Versao", "Version"),
                 RightValue = L("Xbox Series, run through VIctory", "Xbox Series, corrida pelo VIctory", "Xbox Series, lancée par VIctory"),
                 Title = L("Ready", "Pronto", "Prêt"), Accent = L("when you are.", "quando quiseres.", "quand tu veux."),
@@ -705,7 +772,7 @@ namespace VIctoryLauncher
                 // Seven presets and six 12 px gaps fill exactly W (the last one reaches the right edge).
                 int cl = (int)Math.Round(i * (W + 12) / 7.0), cr = (int)Math.Round((i + 1) * (W + 12) / 7.0) - 12;
                 var c = new ModeCard { Title = modes[k].Name, Tag2 = modes[k].Tag, Line = modes[k].Short, Location = new Point(X + cl, y), Size = new Size(cr - cl, 78), Tag = k };
-                c.Click += (s, e) => { SelectMode(k); if (k == ModeCustom) Show(PageCustom); };
+                c.Click += (s, e) => { ManualChoice(); SelectMode(k); if (k == ModeCustom) Show(PageCustom); };
                 cards.Add(c);
                 page.Controls.Add(c);
             }
@@ -716,8 +783,8 @@ namespace VIctoryLauncher
 
             // Launch options: three columns of flat rows (title, one muted line, the switch), a hairline between rows.
             page.Controls.Add(new Heading(L("Launch options", "Opcoes de arranque", "Options de lancement")) { Location = new Point(X, y), Width = W - 370, Hair = false });
-            var best = new Pill { Text = L("Reset to recommended", "Repor o recomendado", "Revenir au recommandé"), Location = new Point(X + W - 354, y - 3), Size = new Size(200, 32) };
-            best.Click += (s, e) => Recommended();
+            var best = new Pill { Text = L("Automatic for this PC", "Automatico para este PC", "Automatique pour ce PC"), Location = new Point(X + W - 354, y - 3), Size = new Size(200, 32) };
+            best.Click += (s, e) => { WriteSetting("auto", "1"); AutoBest(true); };
             page.Controls.Add(best);
             var tweaks = new Pill { Text = L("Advanced Tweaks", "Ajustes avancados", "Réglages avancés"), Location = new Point(X + W - 146, y - 3), Size = new Size(146, 32) };
             tweaks.Click += (s, e) => Show(PageCustom);
@@ -736,29 +803,37 @@ namespace VIctoryLauncher
             Func<string, string, int, int, bool, CheckBox> T = (title, line, col, row, on) => {
                 var t = new OptionCard { Text = title, Line = line, Checked = on, Location = new Point(X + colLeft(col), y + row * 70), Size = new Size(colLeft(col + 1) - colLeft(col) - 28, 70) };
                 t.CheckedChanged += (s, e) => Refresh2();
+                // A click (mouse or keyboard) is the player's own choice; the launcher setting it is not.
+                t.Click += (s, e) => ManualChoice();
                 page.Controls.Add(t);
                 return t;
             };
             borderlessBox = T(L("★ Borderless Fullscreen", "★ Ecra inteiro sem bordas"), L("Native desktop presentation", "Apresentacao nativa no ambiente de trabalho"), 0, 0, true);
             fps60Box = T(L("★ Unlock 60 FPS Clock", "★ Desbloquear relogio de 60 FPS"), L("Decoupled simulation tick (no 30 FPS cap)", "Tick de simulacao separado (sem limite de 30 FPS)"), 0, 1, true);
             panelBox = T(L("★ Diagnostics Overlay (F3)", "★ Overlay de diagnostico (F3)"), L("FPS, frame time, VRAM & RAM", "FPS, tempo de frame, VRAM e RAM"), 0, 2, true);
-            smoothBox = T(L("Frame generation", "Geracao de frames"), FrameGenLine(), 0, 3, true);
-            reserveBox = T(L("Keep the most video memory", "Guardar o maximo de VRAM"), L("Windows reserves video memory for the game", "O Windows reserva VRAM para o jogo"), 1, 0, true);
+            smoothBox = T(FgTitle(), FrameGenLine(), 0, 3, true);
+            reserveBox = T(L("◇ Keep the most video memory", "◇ Guardar o maximo de VRAM"), L("Windows reserves video memory for the game", "O Windows reserva VRAM para o jogo"), 1, 0, true);
             cpuBox = T(L("★ More CPU cores", "★ Mais nucleos do processador"), L("Half the cores copy the game's memory (+1 FPS)", "Metade dos nucleos copia a memoria do jogo (+1 FPS)"), 1, 1, true);
-            warmBox = T(L("Load pipelines before the game", "Carregar pipelines antes do jogo"), L("No stutter the first time you see a place", "Sem engasgos a primeira vez que ves um sitio"), 1, 2, true);
+            warmBox = T(L("◇ Load pipelines before the game", "◇ Carregar pipelines antes do jogo"), L("No stutter the first time you see a place", "Sem engasgos a primeira vez que ves um sitio"), 1, 2, true);
             fightsBox = T(L("★ Crowds and fights", "★ Multidoes e lutas"), L("2 GB of the game's buffers on the card", "2 GB dos buffers do jogo na placa"), 1, 3, true);
             // Anti-stretch is off for everyone and hidden since 0.3.14 (it turned the picture cyan and dark): the
             // box stays for the code that reads it, out of sight, and the picture fixes move up into its place.
             qualityBox = T(L("Anti-stretch", "Anti-esticados"), L("Fewer stretched bodies; several FPS slower", "Menos corpos esticados; varios FPS mais lento"), 2, 3, false);
             qualityBox.Visible = false;
-            facesBox = T(L("Rainbow-face fix", "Correcao das caras arco-iris"), L("Textures finish uploading first; costs FPS", "Texturas acabam de subir primeiro; custa FPS"), 2, 0, false);
-            loadingBox = T(L("Fast loading (experimental)", "Carregamento rapido (experimental)"), L("Shorter loading pauses; untested", "Pausas de carregamento mais curtas; nao testado"), 2, 1, false);
+            facesBox = T(L("◇ Rainbow-face fix", "◇ Correcao das caras arco-iris"), L("Textures finish uploading first; costs FPS", "Texturas acabam de subir primeiro; custa FPS"), 2, 0, false);
+            loadingBox = T(L("◇ Fast loading", "◇ Carregamento rapido"), L("Shorter loading pauses; untested", "Pausas de carregamento mais curtas; nao testado"), 2, 1, false);
             y += 4 * 70 + 14;
             // Which frame generation, when the switch above is on.
             page.Controls.Add(new Label { Text = L("Frame generation engine", "Motor de geracao de frames", "Moteur de génération d'images"), Location = new Point(X, y + 6), AutoSize = true, ForeColor = Theme.Soft, BackColor = Theme.Back, Font = Theme.Ui(9.5f) });
-            fgBox = new ComboBox { Location = new Point(X + 220, y + 2), Width = 340, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = Theme.Card, ForeColor = Theme.Text };
+            fgBox = new Dropdown { Location = new Point(X + 220, y + 2), Width = 340, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = Theme.Card, ForeColor = Theme.Text };
             fgBox.SelectedIndexChanged += (s, e) => PickFg();
             page.Controls.Add(fgBox);
+            y += 38;
+            // Which upscaler does the title's own: AMD's FSR at a render scale, or the title's as today.
+            page.Controls.Add(new Label { Text = L("Upscaling", "Upscaling", "Upscaling"), Location = new Point(X, y + 6), AutoSize = true, ForeColor = Theme.Soft, BackColor = Theme.Back, Font = Theme.Ui(9.5f) });
+            fsrBox = new Dropdown { Location = new Point(X + 220, y + 2), Width = 340, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = Theme.Card, ForeColor = Theme.Text };
+            fsrBox.SelectedIndexChanged += (s, e) => PickFsr();
+            page.Controls.Add(fsrBox);
             y += 40;
             explain = new Label { Location = new Point(X, y), Size = new Size(W, 40), ForeColor = Theme.Muted, BackColor = Theme.Back, Font = Theme.Ui(9f),
                 Text = L("Point at an option for the details. Tested: tried on edupode's PC (RTX 5070 Ti laptop).", "Passa o rato por uma opcao para ver os detalhes. Testado: experimentado no PC do edupode (portatil RTX 5070 Ti).", "Survole une option pour les détails. Testé : essayé sur le PC d'edupode (portable RTX 5070 Ti).") };
@@ -842,17 +917,69 @@ namespace VIctoryLauncher
 
         // The setup that worked on edupode's PC: 720p with light textures, borderless (test A), 60 FPS clock, overlay;
         // plus the new video-memory reserve and Smooth Motion.
-        void Recommended()
+        void Recommended(bool say = true)
         {
             SelectMode(0);
             panelBox.Checked = true; borderlessBox.Checked = true; fps60Box.Checked = true; reserveBox.Checked = true;
             smoothBox.Checked = rtxFrameGen;
             fightsBox.Checked = !integratedOnly && vramGb >= 11; cpuBox.Checked = true; qualityBox.Checked = false; facesBox.Checked = false; loadingBox.Checked = false; warmBox.Checked = true;
-            Log(L("Recommended setup (= the TUDO + lutas shortcut): Recommended 720p, overlay, borderless, 60 FPS clock, 2 GB of buffers for crowds, video memory reserve" + (rtxFrameGen ? ", Smooth Motion." : "."),
+            if (say) Log(L("Recommended setup (= the TUDO + lutas shortcut): Recommended 720p, overlay, borderless, 60 FPS clock, 2 GB of buffers for crowds, video memory reserve" + (rtxFrameGen ? ", Smooth Motion." : "."),
                   "Configuracao recomendada (= atalho TUDO + lutas): Recomendado 720p, overlay, sem bordas, relogio de 60 FPS, 2 GB de buffers para multidoes, reserva de VRAM" + (rtxFrameGen ? ", Smooth Motion." : "."),
                   "Réglages recommandés (= raccourci TUDO + lutas) : Recommandé 720p, overlay, sans bordure, horloge à 60 FPS, 2 Go de buffers pour les foules, réserve de VRAM" + (rtxFrameGen ? ", Smooth Motion." : ".")));
             // Integrated graphics: the lightest setup, nothing that costs memory it does not have.
             if (integratedOnly) { SelectMode(ModeUltraLow); fps60Box.Checked = false; smoothBox.Checked = false; fightsBox.Checked = false; }
+        }
+
+        // Automatic settings (launcher.ini auto, on unless the player chose something): every time the launcher
+        // opens, the preset this PC's card and memory hold best, the tested options, and the frame generation that is
+        // tested on this card (NVIDIA Smooth Motion on an RTX 40/50; the experimental ones are never turned on by
+        // themselves). A preset, an option or a frame generation the player picks turns it off; "Automatic for this
+        // PC" turns it on again.
+        bool AutoOn { get { return ReadSetting("auto") != "0"; } }
+
+        void ManualChoice()
+        {
+            if (!AutoOn) return;
+            WriteSetting("auto", "0");
+            Log(L("Your own settings from now on (\"Automatic for this PC\" brings the automatic ones back).",
+                  "As tuas definicoes a partir de agora (\"Automatico para este PC\" repoe as automaticas).",
+                  "Tes propres réglages désormais (« Automatique pour ce PC » rétablit les automatiques)."));
+        }
+
+        // The preset for this PC: the lightest for integrated graphics, 16 GB of RAM or 6 GB of video memory or less;
+        // Modest PC under 10 GB of video memory or 24 GB of RAM; else Recommended.
+        int BestMode()
+        {
+            if (integratedOnly || (ramGb > 0 && ramGb <= 16.5) || (vramGb > 0 && vramGb <= 6.5)) return ModeUltraLow;
+            if ((vramGb > 0 && vramGb < 10) || (ramGb > 0 && ramGb < 24)) return 2;
+            return 0;
+        }
+
+        void AutoBest(bool loud)
+        {
+            // The preset is picked for this PC only when asked ("Automatic for this PC"), on a PC whose preset was
+            // never picked, or after its card or memory changed; otherwise the one it plays with stays. 0.3.21 picked
+            // it at every opening and moved an RX 7600 with 16 GB of RAM from Fastest (17 minutes of play) to Ultra
+            // Low, which ended in its first frame.
+            var hw = (gpuName ?? "") + "|" + Math.Round(vramGb) + "|" + Math.Round(ramGb);
+            var known = ReadSetting("auto_hw");
+            bool pick = loud || modeIndex < 0 || (!string.IsNullOrEmpty(known) && known != hw);
+            int keep = modeIndex;
+            Recommended(false);
+            SelectMode(pick ? BestMode() : keep);
+            WriteSetting("auto_hw", hw);
+            if (FgChoice != "auto") { WriteSetting("fg_engine", "auto"); rtxFrameGen = canSmooth; FillFgBox(); }
+            // Only the tested frame generation goes on by itself.
+            smoothBox.Checked = rtxFrameGen && !integratedOnly;
+            UpdateFgCard();
+            SaveSettings();
+            UpdateBanner(); Refresh2();
+            if (loud || ReadSetting("auto_said") != Selected.Name)
+            {
+                WriteSetting("auto_said", Selected.Name);
+                Log(string.Format(L("Automatic settings for this PC: {0}{1}, tested options only.", "Definicoes automaticas para este PC: {0}{1}, so opcoes testadas.", "Réglages automatiques pour ce PC : {0}{1}, options testées seulement."),
+                    Selected.Name, rtxFrameGen ? ", NVIDIA Smooth Motion" : ""));
+            }
         }
 
         void SelectMode(int k)
@@ -1411,11 +1538,15 @@ namespace VIctoryLauncher
                 "   •  cgbj (cputroll/cgbj-reupload) — the performance build this one starts from",
                 "   •  AnyXboxSeries — Xbox Series runtime work",
                 "   •  Leonidas — fixes and research",
-                "   •  VIctory-NVIDIA (trustno1-coder) — the lighting for NVIDIA cards",
+                "   •  VIctory-NVIDIA (trustno1-coder) and its contributors — DLSS/FSR 3 frame generation, the F1 and F3 menus, save sharing, pads, the water and the lighting for NVIDIA cards: github.com/trustno1-coder/VIctory-NVIDIA",
+                "   •  foxhound (readmet3xt-lab) — the base of the VIctory-NVIDIA code merged here: github.com/readmet3xt-lab/foxhound",
+                "   •  cool_fox (codec-d), DexNom's VIctory, victory-memory-stack (skornuta) — fixes and memory work carried in with it",
+                "   •  DueTonight and mikan123pro — tested save sharing (VIctory-NVIDIA discussion #520)",
                 "   •  fxceless — rendering and performance fixes",
                 "   •  VIctory-7900XTX (avatarmanz) — adaptations from the AMD fork",
                 "   •  VIctory-Belobug-AMD (Belobug) — the alternative engine for Radeon cards: github.com/Belobug/VIctory-Belobug-AMD",
                 "   •  NVSmooth30 (ItsAdeline) — Smooth Motion on RTX 30 cards (experimental): github.com/ItsAdeline/NVSmooth30",
+                "   •  MFG Unlocker (dashdogy, MIT) — DLSS Frame Generation on RTX 20/30, fetched only when picked: github.com/dashdogy/MFG-Unlocker",
                 "   •  Cold Project VI (felicienradio) — the project page this remake follows",
             };
         }
@@ -1450,8 +1581,20 @@ namespace VIctoryLauncher
                 list.Add(Path.Combine(root, "victory.exe"));
                 list.Add(Path.Combine(AppDir, "victory.exe"));
                 // The newest first: a fresh build or a fresh update, whichever came last.
-                return list.Distinct(StringComparer.OrdinalIgnoreCase)
+                var ordered = list.Distinct(StringComparer.OrdinalIgnoreCase)
                     .OrderByDescending(p => File.Exists(p) ? File.GetLastWriteTimeUtc(p) : DateTime.MinValue).ToList();
+                // A launcher that does not run from inside a source folder (installed, or on the Desktop) plays the
+                // emulator its updates bring, whatever older builds lie in a source folder it found: on 0.3.23 an
+                // RTX 4060 kept stopping where that release's engine goes on, with its launcher updated (a source
+                // folder under %LOCALAPPDATA% and another victory.exe beside the game, 28/11/2026).
+                var updated = Path.Combine(AppDir, "victory.exe");
+                bool fromSource = src != null && (root + "\\").StartsWith(src.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
+                if (!fromSource && File.Exists(updated))
+                {
+                    ordered.RemoveAll(p => string.Equals(p, updated, StringComparison.OrdinalIgnoreCase));
+                    ordered.Insert(0, updated);
+                }
+                return ordered;
             }
         }
 
@@ -1465,6 +1608,21 @@ namespace VIctoryLauncher
                 if (File.Exists(Path.Combine(root, "victory.exe")) || File.Exists(Path.Combine(root, "unins000.exe"))) return root;
                 return Path.Combine(Path.GetDirectoryName(dataRoot), "app");
             }
+        }
+
+        // Which emulator the game starts with, for logs and reports: its path (user name taken out), size and date.
+        string ExeLine()
+        {
+            try
+            {
+                var exe = VictoryExe;
+                if (exe == null) return "victory.exe: none";
+                var f = new FileInfo(exe);
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                var shown = exe.StartsWith(home, StringComparison.OrdinalIgnoreCase) ? "%USERPROFILE%" + exe.Substring(home.Length) : exe;
+                return string.Format(System.Globalization.CultureInfo.InvariantCulture, "victory.exe: {0} ({1:N0} bytes, {2:yyyy-MM-dd HH:mm} UTC)", shown, f.Length, f.LastWriteTimeUtc);
+            }
+            catch (Exception e) { return "victory.exe: " + e.Message; }
         }
 
         // This repository's own build (the `victory gpu` probe and the tools), whatever the engine.
@@ -1495,7 +1653,18 @@ namespace VIctoryLauncher
             var exe = VictoryExe;
             if (buildStatus != null)
             {
-                buildStatus.Text = exe != null ? "✓  " + exe : UseAmdEngine
+                if (exe != null && EngineOutdated)
+            {
+                buildStatus.Text = "\u26a0  " + L("Rebuild: ", "Recompilar: ", "Recompiler : ") + OutdatedEngineLine();
+                buildStatus.ForeColor = Theme.Warn;
+                var stale = steps != null ? steps.FirstOrDefault(st => st.Fix == (Func<bool>)BuildBlocking) : null;
+                if (stale != null)
+                {
+                    var title = L("Rebuild VIctory (the source is newer than the engine)", "Recompilar o VIctory (o codigo e mais recente que o motor)", "Recompiler VIctory (le code est plus recent que le moteur)");
+                    if (stale.Title != title) { stale.Title = title; stale.FixText = L("Rebuild", "Recompilar", "Recompiler"); }
+                }
+            }
+            else buildStatus.Text = exe != null ? "✓  " + exe : UseAmdEngine
                     ? L("The AMD engine is not built yet: Setup > 'AMD engine (Belobug)'.", "O motor AMD ainda nao foi compilado: Preparar > 'Motor AMD (Belobug)'.")
                     : L("Not built yet: press 'Build VIctory' (needs Rust and Visual Studio Build Tools).", "Ainda nao compilado: carrega em 'Compilar VIctory' (precisa do Rust e do Visual Studio Build Tools).");
                 buildStatus.ForeColor = exe != null ? Theme.Good : Theme.Warn;
@@ -1604,6 +1773,15 @@ namespace VIctoryLauncher
         {
             if (!failedEarly) { if (ReadSetting("edupode_fails") != "0") WriteSetting("edupode_fails", "0"); return; }
             if (UseAmdEngine || !hasRadeon || hasNvidia) return;
+            // Belobug's repository is gone from GitHub (removed 27/11/2026, its address answers 404): the AMD engine can
+            // no longer be downloaded, so the launcher moves to it only where an earlier Setup left its source.
+            if (!File.Exists(Path.Combine(AmdEngineDir, "Cargo.toml")))
+            {
+                Log(L("The edupode engine ended at start on this Radeon. Belobug's AMD engine can no longer be downloaded (its GitHub page was removed): staying with edupode. A report ('Send errors') helps us make it start on your card.",
+                      "O motor edupode fechou ao arrancar nesta Radeon. O motor AMD do Belobug ja nao pode ser descarregado (a pagina do GitHub foi removida): fica o edupode. Um relatorio ('Enviar erros') ajuda-nos a po-lo a arrancar na tua placa.",
+                      "Le moteur edupode s'est arrêté au lancement sur cette Radeon. Le moteur AMD de Belobug ne peut plus être téléchargé (sa page GitHub a été retirée) : edupode reste. Un rapport ('Envoyer les erreurs') nous aide à le faire démarrer sur ta carte."));
+                return;
+            }
             int fails;
             int.TryParse(ReadSetting("edupode_fails") ?? "0", out fails);
             fails++;
@@ -1670,7 +1848,7 @@ namespace VIctoryLauncher
             fact(L("Frame generation", "Geracao de frames", "Génération d'images"), fgText, Theme.Muted);
             fact(L("Engine", "Motor", "Moteur"), UseAmdEngine ? "AMD · Belobug" : L("Standard", "Padrao", "Standard"), UseAmdEngine ? Theme.Cyan : Theme.Muted);
             var fg = smoothBox as OptionCard;
-            if (fg != null) { fg.Line = FrameGenLine(); fg.Enabled = FrameGenAvailable; fg.Invalidate(); }
+            if (fg != null) { fg.Text = FgTitle(); fg.Line = FrameGenLine(); fg.Enabled = FrameGenAvailable; fg.Invalidate(); }
             banner.FactLabels = labels.ToArray();
             banner.FactValues = values.ToArray();
             banner.FactColors = colors.ToArray();
@@ -1739,6 +1917,7 @@ namespace VIctoryLauncher
             catch (Exception) { }
             DetectCards();
             FillFgBox();
+            FillFsrBox();
             rebar = rebarBios;
             if (!FrameGenAvailable) smoothBox.Checked = false;
             // Integrated graphics, once: the lightest options whatever an earlier launcher saved (it had read the
@@ -1754,6 +1933,8 @@ namespace VIctoryLauncher
             if (modeIndex < 0)
                 SelectMode(integratedOnly || (ramGb > 0 && ramGb <= 16.5) || (vramGb > 0 && vramGb <= 6.5) ? ModeUltraLow
                     : (vramGb > 0 && vramGb < 10) || (ramGb > 0 && ramGb < 24) ? 2 : 0);
+            // Automatic settings: picked again for this PC every time the launcher opens.
+            if (AutoOn) AutoBest(false);
             UpdateBanner();
             UpdateSmooth();
         }
@@ -1835,7 +2016,10 @@ namespace VIctoryLauncher
             set("VICTORY_GAME_DIR", gameBox.Text.Trim());
             set("VICTORY_CACHE_DIR", cacheDir);
             set("VICTORY_DATA_DIR", dataDir);
-            set("VICTORY_LOG", "warn,victory_gpu::host=info,victory_gpu::copystat=info,victory_gpu::framegen=info");
+            // `victory_gpu::streamline` names the upscaler that takes each upscale
+            // (DLSS or AMD's, with the model ffxQuery reports) and `fidelityfx` the
+            // title's first dispatch: the lines that answer "did FSR run?" in a log.
+            set("VICTORY_LOG", "warn,victory_gpu::host=info,victory_gpu::copystat=info,victory_gpu::framegen=info,victory_gpu::streamline=info,victory_hle::modules::fidelityfx=info");
             // The cgbj base (Play-VIctory.cmd pareto-residency) for a 12 GB card.
             set("VICTORY_DISPLAY_MODE", DisplayWidth + "x" + DisplayHeight);
             set("VICTORY_CARD_BUFFERS_MB", "1024");
@@ -1928,7 +2112,7 @@ namespace VIctoryLauncher
             if (borderlessBox.Checked) { set("VICTORY_BORDERLESS", "1"); set("VICTORY_BORDERLESS_DPI", "0"); }
             if (fps60Box.Checked && !m.UltraLow) set("VICTORY_FPS_MAX", "60");
             // VIctory's own frame generation, for cards without Smooth Motion or NVSmooth30.
-            if (smoothBox.Checked && OwnFrameGen) set("VICTORY_FRAMEGEN", "1");
+            if (smoothBox.Checked && OwnFrameGen) set("VICTORY_VI_FRAMEGEN", "1");
             // Advanced Tweaks: the player's values over the preset they start from (Custom.cs).
             if (m.Custom) ApplyCustom(e);
             if (OutputHeight == 720)
@@ -1938,6 +2122,9 @@ namespace VIctoryLauncher
                 if (s == null) { e.Remove("VICTORY_RENDER_SCALE"); e.Remove("VICTORY_OWN_UPSCALER"); }
                 else { set("VICTORY_RENDER_SCALE", s); set("VICTORY_OWN_UPSCALER", "1"); }
             }
+            // DLSS Frame Generation or FSR 3 (Hardware.cs): over the preset's upscaler, so after its scale is known.
+            VendorFrameGen(e);
+            FsrUpscaling(e);
             set("VICTORY_VRAM_RESERVE", reserveBox.Checked ? "max" : "0");
             if (cpuBox.Checked)
             {
@@ -1951,9 +2138,99 @@ namespace VIctoryLauncher
             if (facesBox.Checked) set("VICTORY_TEXTURE_NO_WAIT", "0");
             if (loadingBox.Checked) set("VICTORY_BAKE_NO_WAIT", "1");
             // The F3 panel's "FRAME GEN" line: the driver's frame generation runs outside the emulator.
-            set("VICTORY_PANEL_FRAMEGEN", !smoothBox.Checked ? "OFF" : rtxFrameGen ? "SMOOTH MOTION" : NvSmoothHere ? "NVSMOOTH30" : OwnFrameGen ? "VI 2X" : "OFF");
+            set("VICTORY_PANEL_FRAMEGEN", !smoothBox.Checked ? "OFF" : rtxFrameGen ? "SMOOTH MOTION" : NvSmoothHere ? "NVSMOOTH30"
+                : e.ContainsKey("VICTORY_FRAMEGEN") ? "DLSS FG" : e.ContainsKey("VICTORY_FSR_FRAMEGEN") ? "AMD FG" : OwnFrameGen ? "VI 2X" : "OFF");
+            // The game ends with this code to be started again by the launcher (crates\victory-gpu\src\host\menu.rs,
+            // restart); the first start of a new victory.exe plays 10 seconds (as VIctory-NVIDIA has it since c1cbdc9) and asks for it (it would stay near 14 FPS).
+            set("VICTORY_RESTART_EXIT", RestartExitCode.ToString());
+            var mark = WarmupMark;
+            if (mark != null && !File.Exists(mark)) { set("VICTORY_WARMUP_RESTART", "10"); set("VICTORY_WARMUP_MARK", mark); }
+            // The F1 menu (crates\victory-gpu\src\host\menu.rs): the launcher's choices as it shows them (it does not
+            // change them there: the Play page does), then the switches a player changed in it.
+            if (!e.ContainsKey("VICTORY_MENU_DLSS")) set("VICTORY_MENU_DLSS", "off");
+            if (!e.ContainsKey("VICTORY_MENU_FRAMEGEN")) set("VICTORY_MENU_FRAMEGEN", "0");
+            if (!e.ContainsKey("VICTORY_MENU_FG_TYPE")) set("VICTORY_MENU_FG_TYPE", "auto");
+            set("VICTORY_MENU_FPS", e.ContainsKey("VICTORY_FPS_MAX") ? e["VICTORY_FPS_MAX"] : "1000");
+            set("VICTORY_MENU_CONSOLE", "series-s");
+            if (!e.ContainsKey("VICTORY_FPS_LINE")) set("VICTORY_FPS_LINE", "1");
+            if (!e.ContainsKey("VICTORY_PANEL")) set("VICTORY_PANEL", "0");
+            ApplyMenuFile(e);
             ApplyTestEnv(e);
             return e;
+        }
+
+        // The switches changed in the game's F1 menu, over the preset's: every VICTORY_ line of
+        // %LOCALAPPDATA%\victory\victory-settings.txt but the launcher's own choices (VICTORY_MENU_..., MFG Unlocker),
+        // which the Play page makes. An empty value unsets it; "RESET ALL" in F1 deletes the file. Logged once.
+        string menuFileLogged;
+        // The switches the last read of the F1 menu's file set (the session log marks them "F1").
+        volatile HashSet<string> menuKeys = new HashSet<string>();
+        void ApplyMenuFile(Dictionary<string, string> e)
+        {
+            try
+            {
+                var file = Path.Combine(VictoryHome, "victory-settings.txt");
+                if (!File.Exists(file)) return;
+                var applied = new List<string>();
+                var overrides = new List<string>();
+                var keys = new HashSet<string>();
+                foreach (var raw in File.ReadAllLines(file))
+                {
+                    var line = raw.Trim();
+                    if (line.Length == 0 || line.StartsWith("#")) continue;
+                    var i = line.IndexOf('=');
+                    if (i <= 0) continue;
+                    var k = line.Substring(0, i).Trim();
+                    var v = line.Substring(i + 1).Trim();
+                    if (!k.StartsWith("VICTORY_") || k.StartsWith("VICTORY_MENU_") || k == "VICTORY_MFG_UNLOCKER"
+                        || k == "VICTORY_GAME_DIR" || k == "VICTORY_DATA_DIR" || k == "VICTORY_CACHE_DIR") continue;
+                    string before;
+                    bool had = e.TryGetValue(k, out before);
+                    // F1 wins over the launcher: said where it changes what the launcher chose.
+                    if (had && before != v) overrides.Add(k + ": " + L("launcher", "launcher", "lanceur") + " " + before + " → F1 " + (v.Length == 0 ? L("(unset)", "(apagado)", "(retiré)") : v));
+                    if (v.Length == 0) e.Remove(k); else e[k] = v;
+                    applied.Add(k + "=" + v);
+                    keys.Add(k);
+                }
+                menuKeys = keys;
+                // Said again whenever what F1 changes is not what was said last (not only once per launcher).
+                var said = string.Join(" ", applied.ToArray()) + "|" + string.Join(";", overrides.ToArray());
+                if (applied.Count > 0 && said != menuFileLogged)
+                {
+                    menuFileLogged = said;
+                    Log(L("Settings from the game's F1 menu: ", "Definicoes do menu F1 do jogo: ", "Réglages du menu F1 du jeu : ") + string.Join(" ", applied.ToArray()));
+                    if (overrides.Count > 0)
+                        Log(L("F1 changes over the launcher's choices (F1 wins; RESET ALL in F1 gives them back): ", "O F1 muda escolhas do launcher (o F1 ganha; RESET ALL no F1 repoe-as): ", "F1 change des choix du lanceur (F1 l'emporte ; RESET ALL dans F1 les rend) : ") + string.Join("; ", overrides.ToArray()));
+                }
+            }
+            catch (Exception) { }
+        }
+
+        const int RestartExitCode = 75;
+
+        // %LOCALAPPDATA%\victory\warmed\launcher-<the exe's SHA-256, 16 digits>: this victory.exe had its warm-up start.
+        // (`victory play` keeps its own marks there, by another hash.) null: the exe could not be read.
+        string warmupFor, warmupMark;
+        string WarmupMark
+        {
+            get
+            {
+                var exe = VictoryExe;
+                if (exe == null) return null;
+                try
+                {
+                    var stamp = exe + "|" + File.GetLastWriteTimeUtc(exe).Ticks + "|" + new FileInfo(exe).Length;
+                    if (stamp == warmupFor) return warmupMark;
+                    string hex;
+                    using (var sha = System.Security.Cryptography.SHA256.Create())
+                    using (var f = File.OpenRead(exe))
+                        hex = BitConverter.ToString(sha.ComputeHash(f)).Replace("-", "").ToLowerInvariant().Substring(0, 16);
+                    warmupMark = Path.Combine(VictoryHome, "warmed", "launcher-" + hex);
+                    warmupFor = stamp;
+                    return warmupMark;
+                }
+                catch (Exception) { return null; }
+            }
         }
 
         // Test switches, for trying an engine change before a release: %LOCALAPPDATA%\VIctory\test-env.txt, one
@@ -1986,9 +2263,24 @@ namespace VIctoryLauncher
             // The window is closing (its tools were just stopped): nothing new starts. The callers catch this.
             if (ClosingNow()) throw new InvalidOperationException(L("The launcher is closing.", "O launcher esta a fechar.", "Le lanceur se ferme."));
             var psi = new ProcessStartInfo(VictoryExe, args) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true, WorkingDirectory = UseAmdEngine ? AmdEngineDir : root };
-            foreach (var kv in Environment2()) psi.EnvironmentVariables[kv.Key] = kv.Value;
+            var env = Environment2();
+            foreach (var kv in env) psi.EnvironmentVariables[kv.Key] = kv.Value;
             Directory.CreateDirectory(Path.GetDirectoryName(logFile));
             var writer = new StreamWriter(logFile, true, new UTF8Encoding(false)) { AutoFlush = true };
+            // The settings the game really starts with, and where each came from: the launcher (its page and
+            // preset) or the F1 menu over it. The page, F1 and this list then always tell the same story.
+            if (args.StartsWith("run "))
+            {
+                var f1 = menuKeys;
+                try
+                {
+                    writer.WriteLine("# " + ExeLine());
+                    writer.WriteLine("# effective settings (" + (UseAmdEngine ? "AMD engine" : "engine " + ReadSetting("engine")) + "; [F1] = changed in the game's F1 menu, over the launcher):");
+                    foreach (var kv in env.Where(kv => kv.Key.StartsWith("VICTORY_")).OrderBy(kv => kv.Key, StringComparer.Ordinal))
+                        writer.WriteLine("#   " + kv.Key + "=" + kv.Value + (f1.Contains(kv.Key) ? "   [F1]" : ""));
+                }
+                catch (Exception) { }
+            }
             var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
             DataReceivedEventHandler sink = (s, e) => {
                 if (e.Data == null) return;
@@ -2037,6 +2329,18 @@ namespace VIctoryLauncher
                 return;
             }
             if (!ClearOtherPreparations()) return;
+            // An engine older than the source is yesterday's: it was built before the code that is here now,
+            // and playing it hides every change (2026-11-28: a session on a victory.exe of the day before, with
+            // VICTORY_FSR=1 in its environment and no FSR in it). Rebuild first, and say why.
+            if (EngineOutdated)
+            {
+                Log(L("Not starting: ", "Nao arranco: ", "Je ne démarre pas : ") + OutdatedEngineLine());
+                Log(L("Rebuilding the engine from this folder first; PLAY opens again when it is done.",
+                      "A recompilar o motor a partir desta pasta primeiro; o JOGAR abre outra vez quando acabar.",
+                      "Je recompile d'abord le moteur depuis ce dossier ; JOUER se rouvre quand c'est fini."));
+                Build();
+                return;
+            }
             SaveSettings();
             var state = State();
             if (state == GameState.Running)
@@ -2093,29 +2397,78 @@ namespace VIctoryLauncher
             Busy(true);
             var game = GameExe;
             bool warmFirst = warmBox.Checked;
+            bool frameGenOn = smoothBox.Checked;
             new Thread(() => {
                 try
                 {
+                    // DLSS Frame Generation or FSR 3 picked: NVIDIA's, AMD's or MFG Unlocker's files, where missing.
+                    FetchFrameGenFiles(log, frameGenOn);
                     if (warmFirst) WarmWithBar(log);
                     if (ClosingNow()) return;
                     var started = DateTime.Now;
-                    var p = Start("run \"" + game + "\" --console series-s --execute", log);
-                    gameProc = p; gameHadWindow = false; windowGone = null; Anim.GameRunning = true;
-                    WatchStart(log, p);
-                    // From here the game's own state keeps PLAY off (RUNNING), not the launcher's task,
-                    // so a game that ends badly never leaves PLAY waiting.
-                    Busy(false);
-                    p.WaitForExit();
-                    // NVSmooth30's version.dll is there for the game only (tools must not load it).
-                    RemoveNvSmooth();
-                    int code = 0;
-                    try { code = p.ExitCode; } catch (Exception) { }
+                    Process p;
+                    int code;
+                    // The game may end asking to be started again (RestartExitCode): the first start of a new
+                    // victory.exe, warmed up (WarmupMark), or a restart from its F1 menu. At most three times.
+                    for (int round = 0; ; round++)
+                    {
+                        p = Start("run \"" + game + "\" --console series-s --execute", log);
+                        gameProc = p; gameHadWindow = false; windowGone = null; Anim.GameRunning = true;
+                        WatchStart(log, p);
+                        // From here the game's own state keeps PLAY off (RUNNING), not the launcher's task,
+                        // so a game that ends badly never leaves PLAY waiting.
+                        Busy(false);
+                        p.WaitForExit();
+                        // NVSmooth30's version.dll is there for the game only (tools must not load it).
+                        RemoveNvSmooth();
+                        code = 0;
+                        try { code = p.ExitCode; } catch (Exception) { }
+                        if (code != RestartExitCode || round >= 3 || gameProc != p || ClosingNow()) break;
+                        Log(L("The game asked to start again (the first start of this version, warmed up, or the F1 menu): starting it again.",
+                              "O jogo pediu para arrancar de novo (o primeiro arranque desta versao, ja aquecido, ou o menu F1): a arrancar outra vez.",
+                              "Le jeu a demandé à redémarrer (le premier lancement de cette version, réchauffé, ou le menu F1) : il redémarre."));
+                        Busy(true);
+                        try { Invoke(new Action(ApplyFrameGen)); } catch (Exception) { }
+                        Thread.Sleep(1500);
+                    }
+                    if (code == RestartExitCode) code = 0;
+                    // A warm-up start (the first of a new victory.exe) that failed at once is not asked for again:
+                    // without its mark every later start was a warm-up too, with its notice and restart, and ended the
+                    // same way (0.3.21: an RX 7600 nine times in a row in the first frame, 0x80070057, while the same
+                    // PC played 17 minutes on 0.3.19 without one). The next start is an ordinary one.
+                    if (code != 0 && (DateTime.Now - started).TotalMinutes < 2)
+                    {
+                        try
+                        {
+                            var warm = WarmupMark;
+                            if (warm != null && !File.Exists(warm))
+                            {
+                                Directory.CreateDirectory(Path.GetDirectoryName(warm));
+                                File.WriteAllText(warm, "the warm-up start of this victory.exe failed at once: not asked for again\r\n");
+                                Log(L("The first start of this version failed during its warm-up: the next start skips the warm-up.",
+                                      "O primeiro arranque desta versao falhou durante o aquecimento: o proximo arranque salta o aquecimento.",
+                                      "Le premier lancement de cette version a échoué pendant le réchauffage : le prochain lancement le saute."));
+                            }
+                        }
+                        catch (Exception) { }
+                    }
                     SendSessionLog(log, code, started, DateTime.Now);
+                    // This game's FPS for the players' averages (sent with the hardware report, when sharing is on).
+                    KeepFps(log, started, DateTime.Now);
                     if (gameProc != p) return; // closed from the launcher (Close game, or PLAY again)
                     gameProc = null;
                     if (code != 0)
                         Log(string.Format(L("The game ended with an error (code {0}). Log: {1}", "O jogo terminou com um erro (codigo {0}). Log: {1}"), code, log));
-                    EngineFallback(code != 0 && (DateTime.Now - started).TotalMinutes < 3);
+                    // The game's package without its own DLLs (VIctory says which in the log): the player has to copy
+                    // them, and no engine runs it, so it does not count against this one (VI-F2TB-8822, 28/11/2026: a
+                    // missing amd_fidelityfx_loader_xbox.dll showed as "code 1" and moved an RX 6500 XT to Belobug's engine).
+                    var absentDlls = code != 0 ? MissingDllsInLog(log) : null;
+                    if (absentDlls != null)
+                        Log(string.Format(L("The game's folder is missing its own files: {0}. Copy them from the complete game package next to the game's .exe ({1}), then press PLAY again.",
+                            "Faltam ficheiros do proprio jogo na pasta: {0}. Copia-os do pacote completo do jogo para junto do .exe do jogo ({1}) e carrega em JOGAR outra vez.",
+                            "Il manque des fichiers du jeu lui-même dans son dossier : {0}. Copie-les depuis le paquet complet du jeu à côté du .exe du jeu ({1}), puis appuie de nouveau sur JOUER."),
+                            string.Join(", ", absentDlls), Path.GetDirectoryName(game)));
+                    EngineFallback(absentDlls == null && code != 0 && (DateTime.Now - started).TotalMinutes < 3);
                     if (ClosingNow()) return;
                     Log(L("Game closed. Preparing this session's pipelines for the next one...", "Jogo fechado. A preparar as pipelines desta sessao para a proxima..."));
                     var w = Start("warm --used", log);
@@ -2261,7 +2614,7 @@ namespace VIctoryLauncher
                     "lang=" + (Pt ? "pt" : Fr ? "fr" : "en"), "cache=" + cacheDir, "data=" + dataDir,
                     "game=" + gameBox.Text.Trim(), "exe=" + (exeChoice ?? ""), "mode=" + modeIndex,
                     "panel=" + b(panelBox), "borderless=" + b(borderlessBox), "fps60=" + b(fps60Box), "reserve=" + b(reserveBox),
-                    "smooth=" + b(smoothBox), "quality=" + b(qualityBox), "faces=" + b(facesBox), "loading=" + b(loadingBox), "fights=" + b(fightsBox), "warm=" + b(warmBox), "cpu=" + b(cpuBox), "output=" + (outputBox == null ? 0 : outputBox.SelectedIndex),
+                    "smooth=" + b(smoothBox), "quality=" + b(qualityBox), "faces=" + b(facesBox), "loading=" + b(loadingBox), "fights=" + b(fightsBox), "warm=" + b(warmBox), "cpu=" + b(cpuBox), "output=" + (outputBox == null ? 0 : outputBox.SelectedIndex), "fsr=" + FsrMode,
                 };
                 // The other keys (shaders=, engine=, custom=, source=...) are kept: this used to drop them.
                 var keys = new HashSet<string>(mine.Select(l => l.Substring(0, l.IndexOf('=') + 1)));

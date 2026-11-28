@@ -317,8 +317,8 @@ namespace VIctoryLauncher
             y += 46;
             BarChart.YouText = L("you", "tu", "toi");
             var table = new StatsTable { Location = new Point(X, y), Size = new Size(W, 72), Empty = "...",
-                Headers = new[] { L("Graphics card", "Placa grafica", "Carte graphique"), L("PCs", "PCs", "PC"), L("Video memory", "VRAM", "VRAM"), L("Resizable BAR for the game", "Resizable BAR para o jogo", "Resizable BAR pour le jeu") },
-                Parts = new[] { 4.2f, 1f, 1.6f, 2.6f }, RightAlign = new[] { false, true, true, true } };
+                Headers = new[] { L("Graphics card", "Placa grafica", "Carte graphique"), L("PCs", "PCs", "PC"), L("Video memory", "VRAM", "VRAM"), L("FPS (median)", "FPS (mediana)", "FPS (médian)"), L("Resizable BAR for the game", "Resizable BAR para o jogo", "Resizable BAR pour le jeu") },
+                Parts = new[] { 3.6f, 0.9f, 1.4f, 1.6f, 2.4f }, RightAlign = new[] { false, true, true, true, true } };
             page.Controls.Add(table);
             y += table.Height + 16;
             var charts = new List<Tuple<string, BarChart>>();
@@ -337,25 +337,30 @@ namespace VIctoryLauncher
             int bottom = y;
             new Thread(() => {
                 Dictionary<string, object> s = null;
-                try
+                // Three tries, a few seconds apart (a slow first connection, GitHub's cache).
+                for (int attempt = 0; attempt < 3 && s == null; attempt++)
                 {
-                    ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072;
-                    using (var web = new WebClient())
+                    if (attempt > 0) Thread.Sleep(4000);
+                    try
                     {
-                        web.Headers[HttpRequestHeader.UserAgent] = "Julias-Launcher";
-                        s = new JavaScriptSerializer().DeserializeObject(Encoding.UTF8.GetString(web.DownloadData(StatsJsonUrl))) as Dictionary<string, object>;
+                        ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072;
+                        using (var web = new WebClient())
+                        {
+                            web.Headers[HttpRequestHeader.UserAgent] = "Julias-Launcher";
+                            s = new JavaScriptSerializer().DeserializeObject(Encoding.UTF8.GetString(web.DownloadData(StatsJsonUrl))) as Dictionary<string, object>;
+                        }
                     }
+                    catch (Exception) { }
                 }
-                catch (Exception) { }
-                try
-                {
-                    BeginInvoke(new Action(() => {
-                        // An answer that is not what was expected shows the same "could not be read" state.
-                        try { FillStats(s, head, table, charts); }
-                        catch (Exception) { if (s != null) FillStats(null, head, table, charts); }
-                    }));
-                }
-                catch (Exception) { }
+                // This page is made while the window is still being made: an answer that came before the window had
+                // a handle was dropped (BeginInvoke refused it) and the page said "Reading the averages from
+                // GitHub..." for good (28/11/2026). It waits for the window now, up to a minute.
+                for (int i = 0; i < 600 && !IsHandleCreated && !IsDisposed; i++) Thread.Sleep(100);
+                Post(() => {
+                    // An answer that is not what was expected shows the same "could not be read" state.
+                    try { FillStats(s, head, table, charts); }
+                    catch (Exception) { try { FillStats(null, head, table, charts); } catch (Exception) { } }
+                });
             }) { IsBackground = true }.Start();
             return bottom;
         }
@@ -410,6 +415,10 @@ namespace VIctoryLauncher
                                         "{0:N0} PCs partilham o hardware. Em media: {1:0.#} GB de RAM, {2:0.#} GB de VRAM, {3:0} threads de CPU. Atualizado a {4}.",
                                         "{0:N0} PC partagent leur matériel. En moyenne : {1:0.#} Go de RAM, {2:0.#} Go de VRAM, {3:0} threads CPU. Mis à jour le {4}."),
                 pcs, Num(avg, "ram_gb"), Num(avg, "vram_gb"), Num(avg, "cpu_threads"), at);
+            var fps = Obj(s, "fps");
+            head.Text += Num(fps, "fps_median") > 0
+                ? string.Format(L(" FPS measured on {0:N0} PCs: {1:0.#} median, {2:0.#} in the slowest 5 %.", " FPS medidos em {0:N0} PCs: {1:0.#} de mediana, {2:0.#} nos 5 % mais lentos.", " FPS mesurés sur {0:N0} PC : {1:0.#} médians, {2:0.#} dans les 5 % les plus lents."), Num(fps, "fps_pcs"), Num(fps, "fps_median"), Num(fps, "fps_low"))
+                : L(" FPS: not enough measured games yet (launcher 0.3.21+, sharing on).", " FPS: ainda poucos jogos medidos (launcher 0.3.21+, partilha ligada).", " FPS : pas encore assez de parties mesurées (lanceur 0.3.21+, partage activé).");
             FitLabel(head);
             table.Empty = L("No data yet", "Sem dados ainda", "Pas encore de données");
             foreach (var c in charts) c.Item2.Empty = table.Empty;
@@ -423,6 +432,8 @@ namespace VIctoryLauncher
                 else if (mine.Length > 0 && CardKey(name) == mine) table.Highlight = table.Rows.Count;
                 table.Rows.Add(new[] { name, Num(r, "pcs").ToString("N0"),
                     r.ContainsKey("vram_gb") ? Num(r, "vram_gb").ToString("0") + " GB" : "",
+                    // Measured by the players' launchers (0.3.21 and later), for cards with 3 PCs or more that played.
+                    r.ContainsKey("fps_median") ? Num(r, "fps_median").ToString("0.#") + " (" + Num(r, "fps_pcs").ToString("0") + ")" : "–",
                     r.ContainsKey("rebar_percent") ? Num(r, "rebar_percent").ToString("0") + " %" : "" });
             }
             GrowTo(table, table.Wanted);

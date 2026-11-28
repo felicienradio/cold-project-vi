@@ -17,3 +17,21 @@ game_dir = 'D:\victory-data\game'
 # Other Xbox Series titles used to test platform-level code.
 # env: VICTORY_TEST_TITLES (separated by ';')
 test_titles = []
+
+[upscaling]
+# AMD's own upscaler and frame generation (docs/FSR.md), off by default. They need AMD's
+# signed DLLs, which this repository does not carry: scripts\get-amd-fsr.ps1 fetches them
+# into amd-sdk\FidelityFX\bin (or point at your own folder with VICTORY_FIDELITYFX_DIR).
+# The environment takes precedence over each line here.
+
+# AMD's FSR does the upscaling the title asks its FidelityFX API for.
+#   env: VICTORY_FSR=1
+#fsr = true
+
+# The render scale it upscales from: 'nativeaa' ('dlaa'), 'quality', 'balanced',
+# 'performance' or 'ultraperformance'.   env: VICTORY_FSR_MODE
+#mode = 'quality'
+
+# AMD's frame generation between the title's frames (needs `fsr` above, or DLSS).
+#   env: VICTORY_FSR_FRAMEGEN=1
+#frame_gen = true

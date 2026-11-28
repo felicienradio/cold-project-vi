@@ -20,6 +20,13 @@ const FIELDS = {
   cpu_cores: 'number', cpu_threads: 'number', ram_gb: 'number', board_maker: 'string', board: 'string',
   os: 'string', disk: 'string', laptop: 'boolean',
 };
+// Optional (launcher 0.3.21 and later, with sharing on): the last game of 3 minutes or more on this PC, as the
+// launcher measured it from its own log: median FPS and the slowest 5 %, the preset, engine and launcher version,
+// and how long it was played. Absent from older launchers' reports.
+const OPTIONAL = {
+  fps_median: 'number', fps_low: 'number', fps_minutes: 'number',
+  fps_preset: 'string', fps_engine: 'string', fps_version: 'string',
+};
 const ID = /^VI-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;
 const MAX_BODY = 2048;
 const PER_HOUR = 20;
@@ -31,7 +38,13 @@ async function sha256(text) {
 
 function valid(r) {
   if (typeof r !== 'object' || r === null || Array.isArray(r)) return false;
-  for (const k of Object.keys(r)) if (!(k in FIELDS)) return false;
+  for (const k of Object.keys(r)) if (!(k in FIELDS) && !(k in OPTIONAL)) return false;
+  for (const [k, t] of Object.entries(OPTIONAL)) {
+    if (!(k in r)) continue;
+    const v = r[k];
+    if (t === 'string' && (typeof v !== 'string' || v.length > 40)) return false;
+    if (t === 'number' && (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1000)) return false;
+  }
   for (const [k, t] of Object.entries(FIELDS)) {
     const v = r[k];
     if (t === 'string' && (typeof v !== 'string' || v.length > 200)) return false;
@@ -75,6 +88,14 @@ async function stats(env) {
     return out;
   };
   const mean = (list, f) => Math.round(list.reduce((s, r) => s + (Number(r[f]) || 0), 0) / list.length);
+  // FPS: only PCs whose launcher measured a game (fps_median), a median of their medians; none for fewer than 3.
+  const measured = list => list.filter(r => typeof r.fps_median === 'number' && r.fps_median > 0);
+  const median = xs => { const a = [...xs].sort((x, y) => x - y); const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+  const fps = list => {
+    const m = measured(list);
+    if (m.length < 3) return {};
+    return { fps_pcs: m.length, fps_median: Math.round(median(m.map(r => r.fps_median)) * 10) / 10, fps_low: Math.round(median(m.map(r => Number(r.fps_low) || 0)) * 10) / 10 };
+  };
   const month = Date.now() - 30 * 86400000;
   return {
     updated: new Date().toISOString(),
@@ -90,7 +111,9 @@ async function stats(env) {
       vram_8_gb_or_less: share(r => r.vram_mb <= 8 * 1024),
     },
     gpu_vendors: top(r => r.gpu_vendor),
-    gpus: top(r => r.gpu, list => ({ vram_gb: Math.round(mean(list, 'vram_mb') / 1024), rebar_percent: Math.round(list.filter(r => r.rebar_d3d12 === true).length / list.length * 100) })),
+    gpus: top(r => r.gpu, list => ({ vram_gb: Math.round(mean(list, 'vram_mb') / 1024), rebar_percent: Math.round(list.filter(r => r.rebar_d3d12 === true).length / list.length * 100), ...fps(list) })),
+    fps: fps(rows),
+    fps_presets: top(r => measured([r]).length ? r.fps_preset : null, fps).filter(g => g.name !== 'unknown' && g.name !== 'other'),
     cpus: top(r => r.cpu, list => ({ threads: mean(list, 'cpu_threads') })),
     ram_gb: top(r => String(r.ram_gb)),
     windows: top(r => { const m = (r.os || '').match(/Windows (10|11)/); return m ? 'Windows ' + m[1] : 'other'; }),
