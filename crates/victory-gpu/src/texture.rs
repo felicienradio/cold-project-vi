@@ -430,12 +430,56 @@ fn fill_unlocked() -> bool {
     *ON.get_or_init(|| std::env::var_os("VICTORY_TEXTURE_FILL").is_none_or(|v| v != "0"))
 }
 
+/// The mapping epoch before a read of title memory ([`crate::watch::changes`]):
+/// odd while the runtime changes what title memory shows, and moved every time
+/// one of its changes ends.
+fn mapping_epoch() -> u64 {
+    crate::watch::changes()
+}
+
+/// Whether a read of title memory taken when the epoch said `since` may be kept:
+/// only when no change of mapping began or ended across it. The runtime unmaps
+/// the rest of a view for the moment of a change, so bytes read across one mix
+/// the texture's with what the change put in their place — another texture's,
+/// which the card shows as this one's: the "rainbow" faces, clothes and walls
+/// players report. The waiting path never sees that (it holds the lock a change
+/// needs); the fast path reads first and asks afterwards, here.
+fn steadied(since: u64) -> bool {
+    let after = crate::watch::changes();
+    since == after && after.is_multiple_of(2)
+}
+
+/// What to do with a read of title memory taken when the epoch said `since`, at
+/// `attempt` (0 is the first): keep it, read it again once the change is over
+/// ([`crate::watch::change_over`]), or read it through the waiting path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReadAgain {
+    Keep,
+    Again,
+    Wait,
+}
+
+fn after_read(since: u64, attempt: u32) -> ReadAgain {
+    if steadied(since) {
+        ReadAgain::Keep
+    } else if attempt == 0 {
+        ReadAgain::Again
+    } else {
+        ReadAgain::Wait
+    }
+}
+
 /// Since the last frame-rate line, with [`no_wait`]: refreshes that read
 /// through the kernel because title memory was being remapped, and those
 /// left for the next refresh because a page was not there; staging buffers
 /// filled from the pages there ([`fill_unlocked`]), and of them those that
 /// got less than was mapped (their slots are looked at again).
 pub(crate) static UNLOCKED: [std::sync::atomic::AtomicU64; 4] = [const { std::sync::atomic::AtomicU64::new(0) }; 4];
+
+/// Since the start: reads of title memory thrown away because a change of
+/// mapping straddled them ([`steadied`]). Zero is the healthy number; a large
+/// one means the runtime is remapping through every refresh.
+pub(crate) static STRADDLED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Since the last frame-rate line, exact refreshes (for a bake) that found
 /// the runtime remapping title memory ([`exact_unlocked`]): read whole
@@ -1663,27 +1707,71 @@ impl Staging {
     /// pages that are there ([`Staging::fill`]). Returns the bytes read.
     fn refresh_unlocked(&self, last: &mut Last, size: usize) -> usize {
         use std::sync::atomic::Ordering::Relaxed;
-        let read = with_read(size, |read| {
-            if !crate::host::read_into(self.memory, read) {
-                return false;
+        // A read taken across a change of mapping is thrown away, not detiled:
+        // see [`steadied`]. Once, the change is given its moment and the read
+        // taken again; after that the waiting path has it.
+        for attempt in 0..2 {
+            let since = mapping_epoch();
+            let read = with_read(size, |read| {
+                if !crate::host::read_into(self.memory, read) {
+                    return None;
+                }
+                let hash = digest(read);
+                Some(match after_read(since, attempt) {
+                    ReadAgain::Keep => {
+                        if last.hash != Some(hash) {
+                            last.hash = Some(hash);
+                            self.detile(read);
+                        }
+                        ReadAgain::Keep
+                    }
+                    straddled => straddled,
+                })
+            });
+            // Nothing of it could be read: left as it is, for the next refresh.
+            let Some(taken) = read else { break };
+            match taken {
+                ReadAgain::Keep => {
+                    UNLOCKED[0].fetch_add(1, Relaxed);
+                    return size;
+                }
+                ReadAgain::Again => crate::watch::change_over(),
+                ReadAgain::Wait => {
+                    STRADDLED.fetch_add(1, Relaxed);
+                    return self.refresh_waiting(last, size);
+                }
             }
-            let hash = digest(read);
-            if last.hash != Some(hash) {
-                last.hash = Some(hash);
-                self.detile(read);
-            }
-            true
-        });
-        if read {
-            UNLOCKED[0].fetch_add(1, Relaxed);
-            size
-        } else if last.hash.is_none() && fill_unlocked() {
+        }
+        if last.hash.is_none() && fill_unlocked() {
             self.fill(last, size)
         } else {
             UNLOCKED[1].fetch_add(1, Relaxed);
             last.asked = 0;
             0
         }
+    }
+
+    /// The waiting path's read, for a texture the fast path could not read
+    /// without a change of mapping across it ([`ReadAgain::Wait`]): the lock a
+    /// change needs is held, so what is read is one mapping and not two. Through
+    /// the copy, which stands pages that are not there.
+    fn refresh_waiting(&self, last: &mut Last, size: usize) -> usize {
+        use std::sync::atomic::Ordering::Relaxed;
+        let _mapped = crate::watch::title_memory_reading();
+        with_read(size, |read| {
+            crate::host::copy_mapped(read.as_mut_ptr(), self.memory, size, false);
+            let hash = digest(read);
+            if last.hash != Some(hash) {
+                last.hash = Some(hash);
+                if !read.iter().all(|&b| b == 0) {
+                    self.detile(read);
+                }
+            }
+        });
+        #[cfg(feature = "diagnostics")]
+        crate::copystat::add(crate::copystat::C::TexHashed, size as u64);
+        UNLOCKED[0].fetch_add(1, Relaxed);
+        size
     }
 
     /// An exact refresh (for a bake) that finds the runtime remapping
@@ -1696,12 +1784,18 @@ impl Staging {
     fn refresh_exact_unlocked(&self, last: &mut Last, size: usize) -> Option<bool> {
         use std::sync::atomic::Ordering::Relaxed;
         let mut changed = false;
+        let since = mapping_epoch();
         let read = with_read(size, |read| {
             if !crate::host::read_into(self.memory, read) {
                 return false;
             }
             let hash = digest(read);
             if last.hash != Some(hash) {
+                // A change of mapping across the read: none of it is taken, and
+                // the caller waits for the lock as before ([`steadied`]).
+                if !steadied(since) {
+                    return false;
+                }
                 last.hash = Some(hash);
                 self.detile(read);
                 changed = true;
@@ -1726,13 +1820,22 @@ impl Staging {
         let mut there = 0;
         let got = with_read(size, |read| {
             let mut got = 0;
+            let mut steady = false;
             for _ in 0..4 {
+                let since = mapping_epoch();
                 got = crate::host::read_there(self.memory, read) as u64;
                 there = mapped_bytes(self.memory, size);
-                if got >= there.max(self.expected.load(Relaxed)) {
+                steady = steadied(since);
+                if got >= there.max(self.expected.load(Relaxed)) && steady {
                     break;
                 }
                 crate::watch::change_over();
+            }
+            // (A read the change straddled is not the texture's either: the
+            // zeros below, not a mixture with what the change put there.)
+            if !steady {
+                got = 0;
+                STRADDLED.fetch_add(1, Relaxed);
             }
             if got != 0 {
                 last.hash = Some(digest(read));
@@ -2333,6 +2436,55 @@ fn staging(resource: This, copy: &crate::resource::HostTexture, first: u32) -> O
     });
     map.insert(resource as usize, s.clone());
     Some(s)
+}
+
+
+#[cfg(test)]
+mod mapping_change_tests {
+    use super::*;
+
+    /// A read taken with no change under way is the texture's.
+    #[test]
+    fn a_read_with_no_change_across_it_is_kept() {
+        let since = mapping_epoch();
+        assert!(steadied(since));
+        assert_eq!(after_read(since, 0), ReadAgain::Keep);
+    }
+
+    /// A change that the epoch moves across the read: the bytes may be half the
+    /// texture's and half whatever the change put in their place, so they are not
+    /// kept. The first time the read is taken again once the change is over, and the
+    /// second it goes to the waiting path.
+    #[test]
+    fn a_read_across_a_change_of_mapping_is_thrown_away_then_retried() {
+        let since = mapping_epoch();
+        let change = crate::watch::test_change();
+        // The change began: the epoch is odd, and what it shows is in flux.
+        assert!(!steadied(since), "a change under way: nothing is kept");
+        assert_eq!(after_read(since, 0), ReadAgain::Again);
+        assert_eq!(after_read(since, 1), ReadAgain::Wait);
+        let after = mapping_epoch();
+        assert!(!steadied(since));
+        assert!(!steadied(after), "a change under way, even when asked later");
+        drop(change);
+        // The change ended between the two reads: the epoch moved, so the bytes are
+        // stale too, and the next attempt starts from the new one.
+        assert!(!steadied(since), "the epoch moved across the read");
+        let now = mapping_epoch();
+        assert!(steadied(now));
+        assert_eq!(after_read(now, 0), ReadAgain::Keep);
+    }
+
+    /// A change that begins and ends inside the read is straddled just the same: the
+    /// epoch came back to a different number, which is what the check compares.
+    #[test]
+    fn a_change_that_ends_inside_the_read_moves_the_epoch() {
+        let since = mapping_epoch();
+        drop(crate::watch::test_change());
+        assert!(!steadied(since));
+        assert_eq!(after_read(since, 0), ReadAgain::Again);
+        assert_eq!(after_read(since, 1), ReadAgain::Wait);
+    }
 }
 
 #[cfg(test)]

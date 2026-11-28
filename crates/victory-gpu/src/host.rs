@@ -9859,6 +9859,13 @@ impl Meter {
                      with less than was mapped (looked at again)"
                 );
             }
+            let straddled = crate::texture::STRADDLED.swap(0, Ordering::Relaxed) as f64 / frames;
+            if straddled > 0.0 {
+                tracing::info!(
+                    "texture reads per frame thrown away because the runtime changed a mapping across them: {straddled:.2} \
+                     (read again once the change was over, or through the waiting path)"
+                );
+            }
             let [read, waited] =
                 [0, 1].map(|i| crate::texture::EXACT_UNLOCKED[i].swap(0, Ordering::Relaxed) as f64 / frames);
             if read + waited > 0.0 {

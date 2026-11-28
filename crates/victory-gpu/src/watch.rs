@@ -2655,6 +2655,26 @@ impl Drop for Remapping {
 /// shows: odd while one is under way.
 static CHANGES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+/// A change of mapping for the tests that need one to begin and end between two
+/// reads ([`crate::texture`]'s guard): the epoch as the runtime moves it, without
+/// the hooks [`title_memory_remapping`] installs.
+#[cfg(test)]
+pub(crate) struct TestChange(u8);
+
+#[cfg(test)]
+impl Drop for TestChange {
+    fn drop(&mut self) {
+        CHANGES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// [`TestChange`]: the epoch is odd until it is dropped.
+#[cfg(test)]
+pub(crate) fn test_change() -> TestChange {
+    CHANGES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    TestChange(0)
+}
+
 thread_local! {
     /// This thread holds [`Remapping`]; and put blocks in
     /// [`Guards::changing`].
