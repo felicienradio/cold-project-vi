@@ -387,10 +387,20 @@ pub fn init(asked: &Asked) -> Available {
         match load_and_init(asked, true) {
             Ok(available) => available,
             Err(why) => {
-                tracing::warn!(
-                    folder = %asked.dir.display(),
-                    "Streamline: {why}; DLSS and frame generation stay off, the title's own upscaling and our present run"
-                );
+                // Only DLSS comes from Streamline: AMD's upscaler (`VICTORY_FSR=1`) is loaded
+                // from its own folder and needs nothing of it, so a Radeon without the NVIDIA
+                // SDK has not lost anything when nothing of Streamline's was asked for.
+                if asked.dlss || asked.framegen {
+                    tracing::warn!(
+                        folder = %asked.dir.display(),
+                        "Streamline: {why}; DLSS and its frame generation stay off, the title's own upscaling and our present run"
+                    );
+                } else {
+                    tracing::info!(
+                        folder = %asked.dir.display(),
+                        "Streamline: {why}; DLSS is not asked for, so nothing of it is needed"
+                    );
+                }
                 files_missing = true;
                 Available::default()
             }
@@ -449,6 +459,7 @@ pub fn init(asked: &Asked) -> Available {
         dlss_fg_supported: available.framegen,
         fsr_asked: asked.fsr_framegen,
         fsr_loaded: fsr_framegen,
+        fsr_upscale,
         fsr_needs_dlss,
     });
     Available { fsr_framegen, fsr_upscale, ..available }
@@ -465,6 +476,9 @@ struct Facts {
     dlss_fg_supported: bool,
     fsr_asked: bool,
     fsr_loaded: bool,
+    /// AMD's upscaler is the upscaling (`VICTORY_FSR=1`, its DLLs loaded):
+    /// frame generation reads it instead of DLSS, so nothing here needs Streamline.
+    fsr_upscale: bool,
     /// FSR 3 frame generation was asked and stays off: DLSS upscaling is not running.
     fsr_needs_dlss: bool,
 }
@@ -533,7 +547,11 @@ fn notice_of(f: &Facts, dlss_live: bool, fsr_live: bool) -> Vec<String> {
         } else {
             "FRAME GEN: AMD FSR 3 (CHOSEN IN F1), 2X AT MOST".into()
         });
-        lines.push("FSR 3 FRAME GEN NEEDS DLSS UPSCALING (ON)".into());
+        lines.push(if f.fsr_upscale {
+            "UPSCALING: AMD FSR (VICTORY_FSR=1), NO DLSS NEEDED".into()
+        } else {
+            "FSR 3 FRAME GEN NEEDS DLSS UPSCALING (ON)".into()
+        });
     } else if f.fsr_needs_dlss {
         lines.push("FRAME GEN OFF: FSR 3 NEEDS DLSS UPSCALING ON".into());
         lines.push(match f.no_dlss {
@@ -2409,5 +2427,74 @@ mod failing_tests {
         assert!(!dlss_failing(89, 89));
         assert!(!dlss_failing(120, 1000));
         assert!(!dlss_failing(500, 600));
+    }
+}
+
+#[cfg(all(test, feature = "diagnostics"))]
+mod without_streamline_tests {
+    use super::*;
+
+    /// AMD's folder: `VICTORY_FIDELITYFX_DIR`, else `amd-sdk/FidelityFX/bin`
+    /// above this one (scripts/get-amd-fsr.ps1 put them there).
+    fn amd_folder() -> Option<PathBuf> {
+        if let Some(dir) = std::env::var_os("VICTORY_FIDELITYFX_DIR") {
+            return Some(dir.into());
+        }
+        let mut here = std::env::current_dir().ok()?;
+        loop {
+            let candidate = here.join("amd-sdk").join("FidelityFX").join("bin");
+            if candidate.join("amd_fidelityfx_upscaler_dx12.dll").is_file() {
+                return Some(candidate);
+            }
+            if !here.pop() {
+                return None;
+            }
+        }
+    }
+
+    /// The machine this feature exists for: a Radeon with AMD's FidelityFX
+    /// DLLs and no Streamline at all. `VICTORY_FSR=1` and
+    /// `VICTORY_FSR_FRAMEGEN=1` must reach AMD's upscaler and its frame
+    /// generation without `sl.interposer.dll`, and the picture's notice must
+    /// not ask for DLSS. (2026-11-28: a session log showed FSR upscaling on
+    /// and this notice asking for it anyway.)
+    #[test]
+    fn amd_upscaling_and_frame_generation_need_no_streamline() {
+        let Some(dir) = amd_folder() else {
+            eprintln!("skipping: AMD's DLLs are not in amd-sdk/FidelityFX/bin (scripts/get-amd-fsr.ps1)");
+            return;
+        };
+        let asked = Asked {
+            dlss: false,
+            framegen: false,
+            mode: Mode::Balanced,
+            preset: 0,
+            dir: PathBuf::from("C:/no/streamline/here"),
+            jitter: [0.0, 0.0],
+            mvec: [0.0, 0.0],
+            reactive: true,
+            log_dir: None,
+            hudless: true,
+            present_hook: false,
+            fsr_framegen: true,
+            fsr: true,
+            fidelityfx_dir: dir,
+            series_s: false,
+        };
+        let available = init(&asked);
+        assert!(!available.dlss, "no Streamline folder, so no DLSS");
+        assert!(available.fsr_upscale, "AMD's upscaler takes the title's upscaling without sl.interposer.dll");
+        assert!(available.fsr_framegen, "frame generation runs on that upscaling, not on DLSS");
+        assert!(upscaling(), "the title's upscale dispatches are routed to AMD's upscaler");
+        let notice = notice_at_start();
+        assert!(notice.iter().any(|line| line.contains("FSR")), "{notice:?}");
+        assert!(
+            !notice.iter().any(|line| line.contains("NEEDS DLSS")),
+            "nothing may ask for DLSS while AMD's upscaler runs: {notice:?}"
+        );
+        assert!(
+            !notice.iter().any(|line| line.contains("FILES NOT FOUND")),
+            "AMD's files were found: {notice:?}"
+        );
     }
 }

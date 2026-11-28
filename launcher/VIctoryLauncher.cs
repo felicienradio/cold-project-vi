@@ -2016,7 +2016,10 @@ namespace VIctoryLauncher
             set("VICTORY_GAME_DIR", gameBox.Text.Trim());
             set("VICTORY_CACHE_DIR", cacheDir);
             set("VICTORY_DATA_DIR", dataDir);
-            set("VICTORY_LOG", "warn,victory_gpu::host=info,victory_gpu::copystat=info,victory_gpu::framegen=info");
+            // `victory_gpu::streamline` names the upscaler that takes each upscale
+            // (DLSS or AMD's, with the model ffxQuery reports) and `fidelityfx` the
+            // title's first dispatch: the lines that answer "did FSR run?" in a log.
+            set("VICTORY_LOG", "warn,victory_gpu::host=info,victory_gpu::copystat=info,victory_gpu::framegen=info,victory_gpu::streamline=info,victory_hle::modules::fidelityfx=info");
             // The cgbj base (Play-VIctory.cmd pareto-residency) for a 12 GB card.
             set("VICTORY_DISPLAY_MODE", DisplayWidth + "x" + DisplayHeight);
             set("VICTORY_CARD_BUFFERS_MB", "1024");

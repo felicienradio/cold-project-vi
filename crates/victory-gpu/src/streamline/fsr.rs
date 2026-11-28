@@ -1248,6 +1248,7 @@ mod tests {
             dlss_fg_supported,
             fsr_asked: true,
             fsr_loaded,
+            fsr_upscale: false,
             fsr_needs_dlss: !dlss,
         }
     }
@@ -1283,6 +1284,15 @@ mod tests {
             let amd = lines(facts(false, false, false, series_s), false, false);
             assert!(amd.contains("HAS NO DLSS") && amd.contains("NEEDS DLSS"), "{amd}");
         }
+        // A Radeon with AMD's own upscaling: frame generation reads that, so
+        // nothing on the picture asks for DLSS (2026-11-28, RX 9070 XT).
+        let mut radeon = facts(false, false, true, false);
+        radeon.adapter = "AMD Radeon RX 9070 XT".into();
+        radeon.fsr_upscale = true;
+        radeon.fsr_needs_dlss = false;
+        let radeon = lines(radeon, false, true);
+        assert!(radeon.contains("AMD FSR 3") && radeon.contains("VICTORY_FSR=1"), "{radeon}");
+        assert!(!radeon.contains("NEEDS DLSS"), "{radeon}");
         // A card with DLSS, only turned off: say so, not "this card".
         let mut off = facts(false, true, false, false);
         off.no_dlss = Some(super::super::NoDlss::TurnedOff);
