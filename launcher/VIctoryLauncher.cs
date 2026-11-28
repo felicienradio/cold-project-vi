@@ -804,6 +804,12 @@ namespace VIctoryLauncher
             fgBox = new Dropdown { Location = new Point(X + 220, y + 2), Width = 340, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = Theme.Card, ForeColor = Theme.Text };
             fgBox.SelectedIndexChanged += (s, e) => PickFg();
             page.Controls.Add(fgBox);
+            y += 38;
+            // Which upscaler does the title's own: AMD's FSR at a render scale, or the title's as today.
+            page.Controls.Add(new Label { Text = L("Upscaling", "Upscaling", "Upscaling"), Location = new Point(X, y + 6), AutoSize = true, ForeColor = Theme.Soft, BackColor = Theme.Back, Font = Theme.Ui(9.5f) });
+            fsrBox = new Dropdown { Location = new Point(X + 220, y + 2), Width = 340, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = Theme.Card, ForeColor = Theme.Text };
+            fsrBox.SelectedIndexChanged += (s, e) => PickFsr();
+            page.Controls.Add(fsrBox);
             y += 40;
             explain = new Label { Location = new Point(X, y), Size = new Size(W, 40), ForeColor = Theme.Muted, BackColor = Theme.Back, Font = Theme.Ui(9f),
                 Text = L("Point at an option for the details. Tested: tried on edupode's PC (RTX 5070 Ti laptop).", "Passa o rato por uma opcao para ver os detalhes. Testado: experimentado no PC do edupode (portatil RTX 5070 Ti).", "Survole une option pour les détails. Testé : essayé sur le PC d'edupode (portable RTX 5070 Ti).") };
@@ -1876,6 +1882,7 @@ namespace VIctoryLauncher
             catch (Exception) { }
             DetectCards();
             FillFgBox();
+            FillFsrBox();
             rebar = rebarBios;
             if (!FrameGenAvailable) smoothBox.Checked = false;
             // Integrated graphics, once: the lightest options whatever an earlier launcher saved (it had read the
@@ -2079,6 +2086,7 @@ namespace VIctoryLauncher
             }
             // DLSS Frame Generation or FSR 3 (Hardware.cs): over the preset's upscaler, so after its scale is known.
             VendorFrameGen(e);
+            FsrUpscaling(e);
             set("VICTORY_VRAM_RESERVE", reserveBox.Checked ? "max" : "0");
             if (cpuBox.Checked)
             {
@@ -2556,7 +2564,7 @@ namespace VIctoryLauncher
                     "lang=" + (Pt ? "pt" : Fr ? "fr" : "en"), "cache=" + cacheDir, "data=" + dataDir,
                     "game=" + gameBox.Text.Trim(), "exe=" + (exeChoice ?? ""), "mode=" + modeIndex,
                     "panel=" + b(panelBox), "borderless=" + b(borderlessBox), "fps60=" + b(fps60Box), "reserve=" + b(reserveBox),
-                    "smooth=" + b(smoothBox), "quality=" + b(qualityBox), "faces=" + b(facesBox), "loading=" + b(loadingBox), "fights=" + b(fightsBox), "warm=" + b(warmBox), "cpu=" + b(cpuBox), "output=" + (outputBox == null ? 0 : outputBox.SelectedIndex),
+                    "smooth=" + b(smoothBox), "quality=" + b(qualityBox), "faces=" + b(facesBox), "loading=" + b(loadingBox), "fights=" + b(fightsBox), "warm=" + b(warmBox), "cpu=" + b(cpuBox), "output=" + (outputBox == null ? 0 : outputBox.SelectedIndex), "fsr=" + FsrMode,
                 };
                 // The other keys (shaders=, engine=, custom=, source=...) are kept: this used to drop them.
                 var keys = new HashSet<string>(mine.Select(l => l.Substring(0, l.IndexOf('=') + 1)));

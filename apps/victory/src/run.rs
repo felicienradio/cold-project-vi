@@ -126,6 +126,20 @@ pub fn run(
     // FidelityFX path, which DLSS takes over (`native_1440p::prepare_upscaler`).
     let mut asked = victory_hle::streamline::Asked::from_env().map_err(anyhow::Error::msg)?;
     asked.series_s = matches!(console, Console::SeriesS);
+    // `[upscaling]` of victory.toml (what the launcher writes, docs/FSR.md), the environment
+    // having already won in the config's own resolution. Off unless asked for.
+    if let Some(on) = cfg.upscaling.fsr {
+        asked.fsr = asked.fsr || on;
+    }
+    if let Some(on) = cfg.upscaling.frame_gen {
+        asked.fsr_framegen = asked.fsr_framegen || on;
+    }
+    if let Some(name) = cfg.upscaling.mode.as_deref() {
+        match victory_hle::streamline::Mode::from_name(name) {
+            Some(mode) => asked.mode = mode,
+            None => println!("upscaling      [upscaling] mode = {name}: not one of nativeaa (dlaa), quality, balanced, performance, ultraperformance; the default holds"),
+        }
+    }
     let available = victory_hle::streamline::init(&asked);
     // `VICTORY_FSR_PATH=1`: the title's FidelityFX path at VICTORY_DLSS_MODE's
     // scale with its own FidelityFX upscaling (no Streamline): DLSS's

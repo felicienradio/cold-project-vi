@@ -131,7 +131,7 @@ namespace VIctoryLauncher
             return true;
         }
 
-        // "GpuPreference=2;" (high performance) for every victory.exe the launcher may start.
+        // "GpuPreference=2;" (high performance) for every runtime executable the launcher may start.
         bool SetGpuPreference()
         {
             try
@@ -212,7 +212,9 @@ namespace VIctoryLauncher
         bool DlssFgHere { get { return FgChoice == "dlss" && anyRtx && !UseAmdEngine; } }
         // FSR 3 only with DLSS upscaling (an RTX): without it the game's own FidelityFX check stopped the game
         // (VIctory-NVIDIA #331, #459; their c1cbdc9 makes it ready only with DLSS on).
-        bool FsrFgHere { get { return FgChoice == "fsr" && anyRtx && !UseAmdEngine && !integratedOnly; } }
+        // FSR frame generation needs an upscaling that is not the title's own. DLSS is one; AMD's own
+        // upscaler is the other now (VICTORY_FSR, this engine only), so a dedicated Radeon has it too.
+        bool FsrFgHere { get { return FgChoice == "fsr" && !UseAmdEngine && !integratedOnly && (anyRtx || FsrMode != "off"); } }
 
         // The frame generation the player picked (launcher.ini fg_engine): auto (the best this card has), smooth
         // (NVIDIA Smooth Motion, RTX 40/50), nvsmooth30 (RTX 30, experimental) or vi (VIctory's own, any card,
@@ -222,6 +224,72 @@ namespace VIctoryLauncher
 
         ComboBox fgBox;
         readonly List<string> fgKeys = new List<string>();
+
+        // ---------------------------------------------------------------- upscaling, AMD's own
+        // Which upscaler does the title's own (VICTORY_FSR): AMD's FSR, at the render scale of the
+        // mode picked, in place of the title's own FidelityFX. Off unless asked for: nothing changes
+        // for a PC that does not want it.
+        string FsrMode
+        {
+            get
+            {
+                var v = ReadSetting("fsr_mode");
+                return v == "nativeaa" || v == "quality" || v == "balanced" || v == "performance" || v == "ultraperformance" ? v : "off";
+            }
+        }
+
+        ComboBox fsrBox;
+        readonly List<string> fsrKeys = new List<string>();
+
+        void FillFsrBox()
+        {
+            if (fsrBox == null) return;
+            fsrKeys.Clear(); fsrBox.Items.Clear();
+            Action<string, string> add = (key, text) => { fsrKeys.Add(key); fsrBox.Items.Add(text); };
+            add("off", L("The title's own upscaler (as today)", "O upscaler do proprio jogo (como hoje)", "L'upscaler du jeu (comme aujourd'hui)"));
+            add("nativeaa", L("AMD FSR, native AA (same size, sharpened)", "AMD FSR, AA nativo (mesmo tamanho, mais nitido)", "AMD FSR, AA natif (meme taille, plus net)"));
+            add("quality", L("AMD FSR, quality (2/3 of the screen)", "AMD FSR, qualidade (2/3 do ecra)", "AMD FSR, qualite (2/3 de l'ecran)"));
+            add("balanced", L("AMD FSR, balanced (58 %)", "AMD FSR, equilibrado (58 %)", "AMD FSR, equilibre (58 %)"));
+            add("performance", L("AMD FSR, performance (1/2)", "AMD FSR, desempenho (1/2)", "AMD FSR, performance (1/2)"));
+            add("ultraperformance", L("AMD FSR, ultra performance (1/3)", "AMD FSR, ultra desempenho (1/3)", "AMD FSR, ultra performance (1/3)"));
+            var i = fsrKeys.IndexOf(FsrMode);
+            fsrBox.SelectedIndex = i < 0 ? 0 : i;
+        }
+
+        void PickFsr()
+        {
+            if (fsrBox == null || fsrBox.SelectedIndex < 0 || fsrBox.SelectedIndex >= fsrKeys.Count) return;
+            var key = fsrKeys[fsrBox.SelectedIndex];
+            if (key == FsrMode) return;
+            ManualChoice();
+            WriteSetting("fsr_mode", key);
+            Log(L("Upscaling: ", "Upscaling: ", "Upscaling : ") + fsrBox.SelectedItem);
+            if (key != "off" && !HasFsrUpscaler)
+                Log(L("AMD's FSR files are not in " + FidelityFxDir + ": run scripts\\get-amd-fsr.ps1, or the title's own upscaler runs.",
+                      "Os ficheiros do FSR da AMD nao estao em " + FidelityFxDir + ": corre scripts\\get-amd-fsr.ps1, ou corre o upscaler do proprio jogo.",
+                      "Les fichiers FSR d'AMD ne sont pas dans " + FidelityFxDir + " : lance scripts\\get-amd-fsr.ps1, ou l'upscaler du jeu s'en charge."));
+            UpdateBanner(); Refresh2();
+        }
+
+        /// AMD's upscaler in the folder (`VICTORY_FSR`): the upscaling effect alone is enough.
+        static bool HasFsrUpscaler
+        {
+            get { return File.Exists(Path.Combine(FidelityFxDir, "amd_fidelityfx_loader_dx12.dll")) && File.Exists(Path.Combine(FidelityFxDir, "amd_fidelityfx_upscaler_dx12.dll")); }
+        }
+
+        // What `victory play` sets for AMD's upscaler (docs/FSR.md): the mode's render scale, and the
+        // folder AMD's files are in. No render scale of the preset's own: the app patches the title's
+        // renderer to the mode's, as it does for DLSS.
+        void FsrUpscaling(Dictionary<string, string> e)
+        {
+            if (FsrMode == "off" || UseAmdEngine || integratedOnly) return;
+            if (!HasFsrUpscaler) return;
+            e.Remove("VICTORY_RENDER_SCALE");
+            e.Remove("VICTORY_OWN_UPSCALER");
+            e["VICTORY_FSR"] = "1";
+            e["VICTORY_FSR_MODE"] = FsrMode;
+            e["VICTORY_FIDELITYFX_DIR"] = FidelityFxDir;
+        }
 
         // The choices this card has, once the card is known (DetectSystem).
         void FillFgBox()
@@ -234,8 +302,9 @@ namespace VIctoryLauncher
             if (!UseAmdEngine && anyRtx)
                 add("dlss", olderRtx ? L("DLSS Frame Generation (RTX 20/30, with MFG Unlocker)", "DLSS Frame Generation (RTX 20/30, com o MFG Unlocker)", "DLSS Frame Generation (RTX 20/30, avec MFG Unlocker)")
                                      : L("DLSS Frame Generation (RTX 40/50, experimental)", "DLSS Frame Generation (RTX 40/50, experimental)", "DLSS Frame Generation (RTX 40/50, expérimental)"));
-            if (!UseAmdEngine && !integratedOnly && anyRtx)
-                add("fsr", L("AMD FSR 3 (with DLSS upscaling, experimental)", "AMD FSR 3 (com o upscaling DLSS, experimental)", "AMD FSR 3 (avec l'upscaling DLSS, expérimental)"));
+            if (!UseAmdEngine && !integratedOnly && (anyRtx || FsrMode != "off"))
+                add("fsr", anyRtx ? L("AMD frame generation (with AMD's upscaler, experimental)", "Geracao de frames AMD (com o upscaler AMD, experimental)", "Generation d'images AMD (avec l'upscaler AMD, experimental)")
+                                 : L("AMD frame generation (needs AMD FSR upscaling above, experimental)", "Geracao de frames AMD (precisa do FSR acima, experimental)", "Generation d'images AMD (demande l'upscaler FSR ci-dessus, experimental)"));
             if (rtx30 && File.Exists(NvSmoothDll)) add("nvsmooth30", L("NVSmooth30 (RTX 30, experimental)", "NVSmooth30 (RTX 30, experimental)", "NVSmooth30 (RTX 30, expérimental)"));
             if (!UseAmdEngine && !integratedOnly) add("vi", L("VIctory 2X (any card, experimental)", "VIctory 2X (qualquer placa, experimental)", "VIctory 2X (toute carte, expérimental)"));
             var i = fgKeys.IndexOf(FgChoice);
@@ -442,7 +511,14 @@ namespace VIctoryLauncher
             e["VICTORY_DLSS_MODE"] = mode;
             if (dlss) { e["VICTORY_DLSS"] = "1"; e["VICTORY_STREAMLINE_DIR"] = StreamlineDir; }
             if (DlssFgHere) e["VICTORY_FRAMEGEN"] = "1";
-            else { e["VICTORY_FSR_FRAMEGEN"] = "1"; e["VICTORY_FIDELITYFX_DIR"] = FidelityFxDir; }
+            else
+            {
+                e["VICTORY_FSR_FRAMEGEN"] = "1";
+                e["VICTORY_FIDELITYFX_DIR"] = FidelityFxDir;
+                // Without DLSS, AMD's upscaler is what frame generation reads from (the title's own
+                // stops the game without one).
+                if (!dlss) { e["VICTORY_FSR"] = "1"; e["VICTORY_FSR_MODE"] = mode; }
+            }
             e["VICTORY_FRAMEGEN_X"] = "2";
             // Frame generation takes 1.5 to 2 GB of the card's memory, which the layer otherwise fills with textures.
             e["VICTORY_TEXTURE_ROOM_PERCENT"] = "80";

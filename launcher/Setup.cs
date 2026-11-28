@@ -764,12 +764,13 @@ namespace VIctoryLauncher
         }
 
         // A ready-made emulator is here (a release, or the installer): nothing has to be compiled.
+        // A ready-made emulator is here (a release, or the installer): nothing has to be compiled.
         // Rust and the C++ tools are asked for only while an engine still has to be compiled: the engine in use is
         // there already (a release's victory.exe, a build from source, or Belobug's AMD engine built once). Players
         // with both installed were asked again after an update (27/11/2026).
         bool NothingToBuild { get { return VictoryExe != null || (!UseAmdEngine && (File.Exists(Path.Combine(root, "victory.exe")) || File.Exists(Path.Combine(AppDir, "victory.exe")))); } }
 
-        // cargo.exe where rustup puts it: %CARGO_HOME%\bin when set, else %USERPROFILE%\.cargo\bin, or anywhere on PATH.
+        // cargo.exe where rustup puts it: %CARGO_HOME%in when set, else %USERPROFILE%\.cargoin, or anywhere on PATH.
         static string FoundCargo()
         {
             var home = Environment.GetEnvironmentVariable("CARGO_HOME");
@@ -867,7 +868,7 @@ namespace VIctoryLauncher
             var log = Path.Combine(dataRoot, "logs", logName);
             Directory.CreateDirectory(Path.GetDirectoryName(log));
             int crates = 0;
-            var psi = new ProcessStartInfo(CargoExe, "build --locked --profile diag -p victory --features diagnostics") { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true, WorkingDirectory = folder };
+            var psi = new ProcessStartInfo(CargoExe, "build --locked --profile diag -p victory --bin victory --features diagnostics") { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true, WorkingDirectory = folder };
             var cargoBin = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cargo", "bin");
             psi.EnvironmentVariables["PATH"] = cargoBin + ";" + Environment.GetEnvironmentVariable("PATH");
             // A storage folder on another drive (Storage.cs): the build goes there, not into the source folder.
