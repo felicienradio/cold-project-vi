@@ -32,6 +32,30 @@ namespace VIctoryLauncher
                 try { File.AppendAllText(ErrorFile, DateTime.Now + "  " + e.Exception + Environment.NewLine); } catch (Exception) { }
                 MessageBox.Show("Julia's Launcher: " + e.Exception.Message + "\r\n\r\n(Help > Send errors to Discord)", "Julia's Launcher", MessageBoxButtons.OK, MessageBoxIcon.Error);
             };
+            // `--stale-check <source folder> <engine exe> <result file>`: for scripts\test-launcher-stale.ps1,
+            // which proves the freshness rule without the game (a windowless program has no console to print
+            // to). The same walk the Setup step and PLAY use.
+            int stale = Array.IndexOf(args, "--stale-check");
+            if (stale >= 0 && stale + 2 < args.Length)
+            {
+                var src = args[stale + 1];
+                var engineExe = args[stale + 2];
+                var result = stale + 3 < args.Length ? args[stale + 3] : null;
+                // The verdict is the exit code (0 fresh, 1 stale, 2 error): a windowless program has no
+                // console, and a file in a temporary folder proved unreliable under the test's own profile.
+                // The times go beside it when a file was named.
+                try
+                {
+                    var newest = LauncherForm.NewestInputIn(src);
+                    var engine = File.Exists(engineExe) ? File.GetLastWriteTimeUtc(engineExe) : DateTime.MinValue;
+                    var newer = newest > engine;
+                    if (!string.IsNullOrEmpty(result))
+                        try { File.WriteAllText(result, (newer ? "stale " : "fresh ") + newest.ToString("o") + " " + engine.ToString("o")); }
+                        catch (Exception) { }
+                    return newer ? 1 : 0;
+                }
+                catch (Exception) { return 2; }
+            }
             // The installer's one administrator step (installer\VI.iss): Windows settings, then out.
             if (args.Contains("--admin-setup")) return AdminTasks.Run(args);
             // The Setup page's virtual memory step, run as administrator (no PowerShell).
@@ -1629,7 +1653,18 @@ namespace VIctoryLauncher
             var exe = VictoryExe;
             if (buildStatus != null)
             {
-                buildStatus.Text = exe != null ? "✓  " + exe : UseAmdEngine
+                if (exe != null && EngineOutdated)
+            {
+                buildStatus.Text = "\u26a0  " + L("Rebuild: ", "Recompilar: ", "Recompiler : ") + OutdatedEngineLine();
+                buildStatus.ForeColor = Theme.Warn;
+                var stale = steps != null ? steps.FirstOrDefault(st => st.Fix == (Func<bool>)BuildBlocking) : null;
+                if (stale != null)
+                {
+                    var title = L("Rebuild VIctory (the source is newer than the engine)", "Recompilar o VIctory (o codigo e mais recente que o motor)", "Recompiler VIctory (le code est plus recent que le moteur)");
+                    if (stale.Title != title) { stale.Title = title; stale.FixText = L("Rebuild", "Recompilar", "Recompiler"); }
+                }
+            }
+            else buildStatus.Text = exe != null ? "✓  " + exe : UseAmdEngine
                     ? L("The AMD engine is not built yet: Setup > 'AMD engine (Belobug)'.", "O motor AMD ainda nao foi compilado: Preparar > 'Motor AMD (Belobug)'.")
                     : L("Not built yet: press 'Build VIctory' (needs Rust and Visual Studio Build Tools).", "Ainda nao compilado: carrega em 'Compilar VIctory' (precisa do Rust e do Visual Studio Build Tools).");
                 buildStatus.ForeColor = exe != null ? Theme.Good : Theme.Warn;
@@ -2291,6 +2326,18 @@ namespace VIctoryLauncher
                 return;
             }
             if (!ClearOtherPreparations()) return;
+            // An engine older than the source is yesterday's: it was built before the code that is here now,
+            // and playing it hides every change (2026-11-28: a session on a victory.exe of the day before, with
+            // VICTORY_FSR=1 in its environment and no FSR in it). Rebuild first, and say why.
+            if (EngineOutdated)
+            {
+                Log(L("Not starting: ", "Nao arranco: ", "Je ne démarre pas : ") + OutdatedEngineLine());
+                Log(L("Rebuilding the engine from this folder first; PLAY opens again when it is done.",
+                      "A recompilar o motor a partir desta pasta primeiro; o JOGAR abre outra vez quando acabar.",
+                      "Je recompile d'abord le moteur depuis ce dossier ; JOUER se rouvre quand c'est fini."));
+                Build();
+                return;
+            }
             SaveSettings();
             var state = State();
             if (state == GameState.Running)

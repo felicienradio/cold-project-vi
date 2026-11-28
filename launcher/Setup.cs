@@ -514,7 +514,9 @@ namespace VIctoryLauncher
                 Title = L("Build VIctory", "Compilar o VIctory"),
                 Why = L("Compiles the emulator from this folder (several minutes, once; again after an update).", "Compila o emulador a partir desta pasta (alguns minutos, uma vez; de novo depois de atualizar)."),
                 FixText = L("Build", "Compilar"),
-                Check = () => UseAmdEngine ? (OwnVictoryExe != null ? 1 : -1) : VictoryExe != null ? 1 : 0,
+                // (An engine older than its source counts as not built: a launcher that played it ran
+                // yesterday's code after a pull — see OutdatedEngine.)
+                Check = () => UseAmdEngine ? (OwnVictoryExe != null ? 1 : -1) : VictoryExe == null ? 0 : EngineOutdated ? 0 : 1,
                 Fix = BuildBlocking,
             });
             steps.Add(new Step {
@@ -770,7 +772,86 @@ namespace VIctoryLauncher
         // with both installed were asked again after an update (27/11/2026).
         bool NothingToBuild { get { return VictoryExe != null || (!UseAmdEngine && (File.Exists(Path.Combine(root, "victory.exe")) || File.Exists(Path.Combine(AppDir, "victory.exe")))); } }
 
-        // cargo.exe where rustup puts it: %CARGO_HOME%in when set, else %USERPROFILE%\.cargoin, or anywhere on PATH.
+        // ---------------------------------------------------------------- is the engine older than the source?
+        // A launcher that played whatever binary it found ran yesterday's engine after a pull, with every
+        // switch right and no FSR in it (2026-11-28: target\diag\victory.exe of the day before while the
+        // environment said VICTORY_FSR=1). The engine is rebuilt when the newest input of a build is newer
+        // than it: any .rs or .toml under the source, build.rs, and Cargo.toml / Cargo.lock /
+        // rust-toolchain.toml at its root. `target` and dot directories are not inputs. One walk per
+        // launch: memoised here, never per frame.
+        DateTime? newestInput;
+        string newestInputOf;
+
+        /// The newest input of a build in the source folder, cached for the launch.
+        DateTime NewestInput()
+        {
+            var src = SourceDir;
+            if (src == null) return DateTime.MinValue;
+            if (newestInput.HasValue && newestInputOf == src) return newestInput.Value;
+            var newest = NewestInputIn(src);
+            newestInput = newest;
+            newestInputOf = src;
+            return newest;
+        }
+
+        /// The newest .rs/.toml/build.rs under `folder`, `target` and dot directories left out.
+        public static DateTime NewestInputIn(string folder)
+        {
+            var newest = DateTime.MinValue;
+            try { Walk(new DirectoryInfo(folder), 0, ref newest); } catch (Exception) { }
+            return newest;
+        }
+
+        static void Walk(DirectoryInfo dir, int depth, ref DateTime newest)
+        {
+            if (depth > 12) return;
+            try
+            {
+                foreach (var f in dir.EnumerateFiles())
+                {
+                    var name = f.Name;
+                    bool input = name.EndsWith(".rs", StringComparison.OrdinalIgnoreCase)
+                              || name.EndsWith(".toml", StringComparison.OrdinalIgnoreCase)
+                              || name.Equals("build.rs", StringComparison.OrdinalIgnoreCase);
+                    if (input && f.LastWriteTimeUtc > newest) newest = f.LastWriteTimeUtc;
+                }
+                foreach (var d in dir.EnumerateDirectories())
+                {
+                    var name = d.Name;
+                    if (name.StartsWith(".") || name.Equals("target", StringComparison.OrdinalIgnoreCase)) continue;
+                    Walk(d, depth + 1, ref newest);
+                }
+            }
+            catch (Exception) { }   // a folder that cannot be listed is no input we know of
+        }
+
+        /// The engine file the launcher would start, when it is older than the source it was built from.
+        public string OutdatedEngine
+        {
+            get
+            {
+                var exe = VictoryExe;
+                if (exe == null || UseAmdEngine || !File.Exists(exe)) return null;
+                try { return NewestInput() > File.GetLastWriteTimeUtc(exe) ? exe : null; }
+                catch (Exception) { return null; }
+            }
+        }
+
+        public bool EngineOutdated { get { return OutdatedEngine != null; } }
+
+        /// What the Setup step and PLAY say when the engine is older than its source: both times, in the
+        /// person's language.
+        public string OutdatedEngineLine()
+        {
+            var exe = OutdatedEngine;
+            if (exe == null) return null;
+            return string.Format(L("the source is newer than {0} (source {1:yyyy-MM-dd HH:mm}, engine {2:yyyy-MM-dd HH:mm} UTC)",
+                                   "o codigo e mais recente que {0} (codigo {1:yyyy-MM-dd HH:mm}, motor {2:yyyy-MM-dd HH:mm} UTC)",
+                                   "le code est plus recent que {0} (code {1:yyyy-MM-dd HH:mm}, moteur {2:yyyy-MM-dd HH:mm} UTC)"),
+                                 Path.GetFileName(exe), NewestInput(), File.GetLastWriteTimeUtc(exe));
+        }
+
+        // cargo.exe where rustup puts it: the CARGO_HOME folder when set, else the user profile's .cargo folder, or anywhere on PATH.
         static string FoundCargo()
         {
             var home = Environment.GetEnvironmentVariable("CARGO_HOME");
