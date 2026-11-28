@@ -761,9 +761,18 @@ fn create_context(
     // SAFETY: filled descriptions that live through the call.
     let code = unsafe { (ffx.create)(&mut *context, (&raw mut create).cast(), std::ptr::null()) };
     if code != OK || context.is_null() {
-        tracing::warn!(code, display = ?size, max_render = ?render, format = format.0, "FSR 3 frame generation: its context was not made; presents stay plain");
+        tracing::warn!(code, display = ?size, max_render = ?render, format = format.0, "FSR frame generation: its context was not made; presents stay plain");
         return None;
     }
+    // Which model AMD's API loaded for it: evidence, not the SDK's marketing.
+    let model = provider(ffx, &mut context);
+    tracing::info!(
+        display = ?size,
+        max_render = ?render,
+        format = format.0,
+        model = %model,
+        "FSR frame generation: its context made (AMD's frame generation, model reported by ffxQuery)"
+    );
     Some(context)
 }
 
@@ -976,6 +985,23 @@ struct ProviderVersion {
     version_name: *const std::ffi::c_char,
 }
 
+/// Which provider (model) AMD's API put behind `context`: `ffxQuery`'s
+/// `ffxQueryGetProviderVersion`, the only evidence of what actually runs
+/// (the upscaler's ML model on RDNA 4, the analytical one elsewhere; the frame
+/// generation effect's own, whatever the SDK calls it).
+fn provider(ffx: &Ffx, context: &mut Context) -> String {
+    let mut query = ProviderVersion { header: Header::new(QUERY_PROVIDER_VERSION), version_id: 0, version_name: std::ptr::null() };
+    // SAFETY: our context and a description it fills.
+    let queried = unsafe { (ffx.query)(context, (&raw mut query).cast()) };
+    if queried == OK && !query.version_name.is_null() {
+        // SAFETY: the provider's name, a NUL-terminated string the effect owns.
+        let name = unsafe { std::ffi::CStr::from_ptr(query.version_name) }.to_string_lossy().into_owned();
+        format!("{name} (id {:#x})", query.version_id)
+    } else {
+        format!("unknown (ffxQuery {queried})")
+    }
+}
+
 /// The upscaler context we made, and what it was made for.
 struct Scale {
     context: Box<Context>,
@@ -1165,15 +1191,7 @@ fn create_scale(ffx: &Ffx, render: [u32; 2], output: [u32; 2], flags: u32) -> Op
     }
     // Which model is behind it: the ML one of FSR 4 where the card runs it,
     // the analytical one elsewhere.
-    let mut query = ProviderVersion { header: Header::new(QUERY_PROVIDER_VERSION), version_id: 0, version_name: std::ptr::null() };
-    // SAFETY: our context and a description it fills.
-    let queried = unsafe { (ffx.query)(&mut *context, (&raw mut query).cast()) };
-    let model = if queried == OK && !query.version_name.is_null() {
-        // SAFETY: the provider's name, a NUL-terminated string the effect owns.
-        unsafe { std::ffi::CStr::from_ptr(query.version_name) }.to_string_lossy().into_owned()
-    } else {
-        format!("unknown (ffxQuery {queried})")
-    };
+    let model = provider(ffx, &mut context);
     tracing::info!(
         render = ?render,
         output = ?output,
@@ -1321,6 +1339,41 @@ mod tests {
         eprintln!("AMD's upscaler made a context: model {}", made.model);
         // SAFETY: our context, and nothing was recorded with it.
         let code = unsafe { (ffx.destroy)(&mut *made.context, std::ptr::null()) };
+        assert_eq!(code, OK, "destroy");
+    }
+
+
+    /// The frame generation effect AMD ships, making a context on the host's card, and the
+    /// model `ffxQuery` says is behind it: the only evidence of what actually runs.
+    #[test]
+    #[cfg(feature = "diagnostics")]
+    fn the_frame_generation_context_says_which_model() {
+        let Some(dir) = amd_folder() else {
+            eprintln!("skipping frame generation: AMD's DLLs are not in amd-sdk/FidelityFX/bin (scripts/get-amd-fsr.ps1)");
+            return;
+        };
+        assert!(super::init(&dir), "AMD's DLLs did not load from {}", dir.display());
+        let ffx = FFX.get().expect("loaded");
+        assert!(ffx.framegen.is_some(), "{} is in the folder", FRAMEGEN);
+        let Some(host) = crate::host::host() else {
+            eprintln!("skipping frame generation: no D3D12 device here");
+            return;
+        };
+        let Some(mut context) = create_context(
+            ffx,
+            &host.device,
+            [1920, 1080],
+            [1280, 720],
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            0,
+            DXGI_FORMAT_UNKNOWN,
+        ) else {
+            panic!("AMD's frame generation made no context for 1080p out, 720p in, on this card");
+        };
+        let model = provider(ffx, &mut context);
+        eprintln!("AMD's frame generation model: {model}");
+        // SAFETY: our context, and nothing was recorded with it.
+        let code = unsafe { (ffx.destroy)(&mut *context, std::ptr::null()) };
         assert_eq!(code, OK, "destroy");
     }
 

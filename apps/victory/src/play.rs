@@ -47,7 +47,7 @@ const FETCH_FSR: &str = include_str!("../../../scripts/get-amd-fsr.ps1");
 /// `scripts\get-d3d12.ps1`, run by Windows PowerShell.
 const FETCH_D3D12: &str = include_str!("../../../scripts/get-d3d12.ps1");
 
-/// The two AMD files FSR 3 frame generation loads.
+/// The two AMD files frame generation loads (the upscaler beside them is `FSR_UPSCALER`).
 const FSR_FILES: [&str; 2] = ["amd_fidelityfx_loader_dx12.dll", "amd_fidelityfx_framegeneration_dx12.dll"];
 /// AMD's upscaler (FSR Upscaling 4's ML model and the analytical one it falls back to), which
 /// `get-fsr` fetches beside them: `VICTORY_FSR` needs it, frame generation does not.
@@ -461,7 +461,7 @@ fn offer_dlss(picked: bool) {
     }
 }
 
-/// Runs the AMD fetcher: AMD's FSR 3 files from AMD's GitHub into `to`.
+/// Runs the AMD fetcher: AMD's FidelityFX SDK 2.4 files from AMD's GitHub into `to`.
 fn fetch_fsr(to: &Path) -> Result<()> {
     std::fs::create_dir_all(to).with_context(|| format!("creating {}", to.display()))?;
     let script = to.join("get-amd-fsr.ps1");
@@ -476,7 +476,7 @@ fn fetch_fsr(to: &Path) -> Result<()> {
     let _ = std::fs::remove_file(&script);
     anyhow::ensure!(
         status.success() && has_fsr(to),
-        "AMD's files did not arrive (see above); the title runs without FSR 3 frame generation"
+        "AMD's files did not arrive (see above); the title runs without AMD's frame generation"
     );
     if !to.join(FSR_UPSCALER).is_file() {
         println!(
@@ -499,14 +499,14 @@ fn offer_fsr(card: &str) {
     let Ok(to) = amd_home() else { return };
     let declined = to.join("declined");
     if declined.exists() || !std::io::stdin().is_terminal() {
-        println!("No AMD FSR 3 files: frame generation stays off on this card (`victory get-fsr` fetches them).");
+        println!("No AMD FidelityFX files: frame generation stays off on this card (`victory get-fsr` fetches them).");
         return;
     }
     if card.is_empty() {
-        println!("FSR 3 frame generation is chosen, and AMD's files for it are not on this PC yet.");
+        println!("AMD's frame generation is chosen, and AMD's files for it are not on this PC yet.");
     } else {
         println!("This card ({card}) has no DLSS frame generation (it needs an RTX 40 or later), but AMD's");
-        println!("FSR 3 frame generation runs on it (2x). AMD's files for it are not on this PC yet.");
+        println!("AMD's frame generation (FidelityFX SDK 2.4) runs on it (2x). AMD's files for it are not on this PC yet.");
     }
     println!("They are AMD's own, under AMD's licence, and come from github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK");
     println!("(about 88 MB, once: frame generation's two files and the upscaler's).");

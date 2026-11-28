@@ -381,7 +381,9 @@ namespace VIctoryLauncher
             if (NvSmoothHere) return L("NVSmooth30 for RTX 30 (experimental)", "NVSmooth30 para RTX 30 (experimental)");
             if (DlssFgHere) return olderRtx ? L("DLSS Frame Generation through MFG Unlocker (RTX 20/30, experimental)", "DLSS Frame Generation pelo MFG Unlocker (RTX 20/30, experimental)", "DLSS Frame Generation par MFG Unlocker (RTX 20/30, expérimental)")
                                             : L("DLSS Frame Generation 2X, with DLSS upscaling", "DLSS Frame Generation 2X, com o upscaling DLSS", "DLSS Frame Generation 2X, avec l'upscaling DLSS");
-            if (FsrFgHere) return L("AMD FSR 3 frame generation 2X", "Geracao de frames AMD FSR 3 2X", "Génération d'images AMD FSR 3 2X");
+            // (Which model runs is AMD's API's to say and the log's to print: ffxQuery answers 4.0.2 here,
+            // the ML frame generation of FidelityFX SDK 2.4 on RDNA 4, not the 3.x one the fork's name suggests.)
+            if (FsrFgHere) return L("AMD frame generation 2X (FidelityFX SDK 2.4: ML on RDNA 4)", "Geracao de frames AMD 2X (FidelityFX SDK 2.4: ML nas RDNA 4)", "Génération d'images AMD 2X (FidelityFX SDK 2.4 : ML sur RDNA 4)");
             if (OwnFrameGen) return L("VI frame generation: any card, a frame between each two (experimental)", "Geracao de frames VI: qualquer placa, um frame entre cada dois (experimental)");
             return L("Not in the AMD engine yet (pick the edupode engine on Hardware & ID to try it)", "Ainda nao no motor AMD (escolhe o motor edupode em Hardware e ID para experimentar)");
         }
@@ -391,7 +393,7 @@ namespace VIctoryLauncher
             if (rtxFrameGen) return "Smooth Motion " + (smoothState == "on" ? L("On", "ligado") : L("ready", "pronto"));
             if (NvSmoothHere) return "NVSmooth30 " + (smoothBox.Checked ? L("On", "ligado") : L("off", "desligado"));
             if (DlssFgHere) return "DLSS FG " + (smoothBox.Checked ? L("On", "ligada") : L("off", "desligada"));
-            if (FsrFgHere) return "FSR 3 " + (smoothBox.Checked ? L("On", "ligada") : L("off", "desligada"));
+            if (FsrFgHere) return "AMD FG " + (smoothBox.Checked ? L("On", "ligada") : L("off", "desligada"));
             if (OwnFrameGen) return L("VI frame gen ", "Geracao VI ") + (smoothBox.Checked ? L("On", "ligada") : L("off", "desligada"));
             return L("Frame gen n/a", "Geracao de frames n/d");
         }
@@ -482,21 +484,21 @@ namespace VIctoryLauncher
             }
             else
             {
-                lines.Add(L("AMD FSR 3 frame generation (from the VIctory-NVIDIA fork): a frame made between each two of the game's (2X).",
-                            "Geracao de frames AMD FSR 3 (do fork VIctory-NVIDIA): um frame criado entre cada dois do jogo (2X).",
-                            "Génération d'images AMD FSR 3 (du fork VIctory-NVIDIA) : une image créée entre chaque deux du jeu (2X)."));
-                lines.Add(L("DLSS does the upscaling FSR 3 reads (an RTX is needed: without DLSS the game stops).", "O DLSS faz o upscaling que o FSR 3 le (e preciso uma RTX: sem DLSS o jogo para).", "DLSS fait l'upscaling que FSR 3 lit (une RTX est nécessaire : sans DLSS le jeu s'arrête)."));
+                lines.Add(L("AMD frame generation, FidelityFX SDK 2.4's: a frame made between each two of the game's (2X). AMD's own API reports which model it runs; on an RDNA 4 card such as this one it is the ML one (4.0.2), not the 3.x generation.",
+                            "Geracao de frames AMD, do FidelityFX SDK 2.4: um frame criado entre cada dois do jogo (2X). A API da AMD diz que modelo corre; numa placa RDNA 4 como esta e o de ML (4.0.2), nao o da geracao 3.x.",
+                            "Génération d'images AMD, celle du FidelityFX SDK 2.4 : une image créée entre chaque deux du jeu (2X). C'est l'API d'AMD qui dit quel modèle tourne ; sur une carte RDNA 4 comme celle-ci, c'est celui par ML (4.0.2), pas la génération 3.x."));
+                lines.Add(L("DLSS does the upscaling it reads (an RTX is needed: without DLSS the game stops).", "O DLSS faz o upscaling que ela le (e preciso uma RTX: sem DLSS o jogo para).", "DLSS fait l'upscaling qu'elle lit (une RTX est nécessaire : sans DLSS le jeu s'arrête)."));
             }
             lines.Add("");
             lines.Add(L("At PLAY, what is missing is downloaded once into " + VictoryHome + ":", "No JOGAR, o que faltar e descarregado uma vez para " + VictoryHome + ":", "Au JOUER, ce qui manque est téléchargé une fois dans " + VictoryHome + " :"));
             if (anyRtx) lines.Add(L("   •  NVIDIA's DLSS files, NVIDIA's own licence, github.com/NVIDIA-RTX/Streamline (about 70 MB)", "   •  os ficheiros DLSS da NVIDIA, licenca da NVIDIA, github.com/NVIDIA-RTX/Streamline (cerca de 70 MB)", "   •  les fichiers DLSS de NVIDIA, licence de NVIDIA, github.com/NVIDIA-RTX/Streamline (environ 70 Mo)"));
-            if (key == "fsr") lines.Add(L("   •  AMD's FSR 3 files, AMD's own licence, github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK (about 30 MB)", "   •  os ficheiros FSR 3 da AMD, licenca da AMD, github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK (cerca de 30 MB)", "   •  les fichiers FSR 3 d'AMD, licence d'AMD, github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK (environ 30 Mo)"));
+            if (key == "fsr") lines.Add(L("   •  AMD's FidelityFX SDK 2.4 files and upscaler, AMD's own licence, github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK (about 88 MB)", "   •  os ficheiros e o upscaler do FidelityFX SDK 2.4 da AMD, licenca da AMD, github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK (cerca de 88 MB)", "   •  les fichiers et l'upscaler du FidelityFX SDK 2.4 d'AMD, licence d'AMD, github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK (environ 88 Mo)"));
             if (mfg) lines.Add(L("   •  MFG Unlocker, from its author's GitHub release", "   •  o MFG Unlocker, da release do autor no GitHub", "   •  MFG Unlocker, depuis la release GitHub de son auteur"));
             lines.Add("");
             lines.Add(L("Experimental here. It replaces the preset's own upscaler (its world resolution becomes the DLSS mode nearest to it). Changes made in the game's F1 menu are not kept when the launcher starts the game.",
                         "Experimental aqui. Substitui o upscaler do preset (a resolucao do mundo passa ao modo DLSS mais proximo). As mudancas feitas no menu F1 do jogo nao ficam guardadas quando o launcher arranca o jogo.",
                         "Expérimental ici. Remplace l'upscaler du preset (sa résolution du monde devient le mode DLSS le plus proche). Les changements faits dans le menu F1 du jeu ne sont pas gardés quand le launcher lance le jeu."));
-            var answer = Notice(key == "dlss" ? "DLSS Frame Generation" : "AMD FSR 3", string.Join("\r\n", lines.ToArray()),
+            var answer = Notice(key == "dlss" ? "DLSS Frame Generation" : "AMD frame generation (FidelityFX SDK 2.4)", string.Join("\r\n", lines.ToArray()),
                 mfg ? L("Use it, with MFG Unlocker", "Usar, com o MFG Unlocker", "L'utiliser, avec MFG Unlocker") : L("Use it", "Usar", "L'utiliser"),
                 L("Cancel", "Cancelar", "Annuler"));
             if (answer != 1) return false;
@@ -560,7 +562,7 @@ namespace VIctoryLauncher
             if (!on || (!DlssFgHere && !FsrFgHere && FsrMode == "off")) return;
             if (FsrBlocked)
             {
-                Log(L("FSR 3 needs the 1080p screen size without an RTX: this game runs without frame generation.", "O FSR 3 precisa do ecra a 1080p sem uma RTX: este jogo corre sem geracao de frames.", "FSR 3 a besoin de l'écran en 1080p sans RTX : ce jeu tourne sans génération d'images."));
+                Log(L("AMD frame generation needs the 1080p screen size here: this game runs without frame generation.", "A geracao de frames da AMD precisa aqui do ecra a 1080p: este jogo corre sem geracao de frames.", "La génération d'images AMD demande ici l'écran en 1080p : ce jeu tourne sans génération d'images."));
                 return;
             }
             // (`VICTORY_FSR` needs the upscaler too; frame generation needs its own two files.)

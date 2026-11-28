@@ -2101,7 +2101,7 @@ namespace VIctoryLauncher
             if (loadingBox.Checked) set("VICTORY_BAKE_NO_WAIT", "1");
             // The F3 panel's "FRAME GEN" line: the driver's frame generation runs outside the emulator.
             set("VICTORY_PANEL_FRAMEGEN", !smoothBox.Checked ? "OFF" : rtxFrameGen ? "SMOOTH MOTION" : NvSmoothHere ? "NVSMOOTH30"
-                : e.ContainsKey("VICTORY_FRAMEGEN") ? "DLSS FG" : e.ContainsKey("VICTORY_FSR_FRAMEGEN") ? "FSR 3" : OwnFrameGen ? "VI 2X" : "OFF");
+                : e.ContainsKey("VICTORY_FRAMEGEN") ? "DLSS FG" : e.ContainsKey("VICTORY_FSR_FRAMEGEN") ? "AMD FG" : OwnFrameGen ? "VI 2X" : "OFF");
             // The game ends with this code to be started again by the launcher (crates\victory-gpu\src\host\menu.rs,
             // restart); the first start of a new victory.exe plays 10 seconds (as VIctory-NVIDIA has it since c1cbdc9) and asks for it (it would stay near 14 FPS).
             set("VICTORY_RESTART_EXIT", RestartExitCode.ToString());

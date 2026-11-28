@@ -79,7 +79,8 @@ pub struct Asked {
     /// our swap chain is Streamline's proxy of it, so that Streamline sees
     /// the presents (its bookkeeping per frame).
     pub present_hook: bool,
-    /// `VICTORY_FSR_FRAMEGEN=1`: AMD FSR 3 frame generation where DLSS Frame
+    /// `VICTORY_FSR_FRAMEGEN=1`: AMD's frame generation (FidelityFX SDK 2.4's,
+    /// which reports 4.0.2 on RDNA 4) where DLSS Frame
     /// Generation does not run ([`fsr`]), from `fidelityfx_dir`
     /// (`VICTORY_FIDELITYFX_DIR`).
     pub fsr_framegen: bool,
